@@ -1,5 +1,4 @@
 import BasePage from '@renderer/components/base/base-page'
-import NetworkTopologyCard from '@renderer/components/network/network-topology'
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { Button, Select, SelectItem, Chip, Tooltip, Input } from '@heroui/react'
 import {
@@ -552,9 +551,6 @@ const IPPage: React.FC = () => {
           )}
         </div>
 
-        {/* 网络拓扑卡片 */}
-        <NetworkTopologyCard />
-
         {/* 网络延迟卡片 */}
         <div className="rounded-xl border border-foreground/10 bg-content1 p-4 shadow-sm">
           <div className="mb-3.5 flex items-center justify-between gap-3">
@@ -567,13 +563,12 @@ const IPPage: React.FC = () => {
             <div className="flex items-center gap-2">
               {averageLatency !== null && (
                 <span
-                  className={`rounded-md px-2 py-1 text-xs font-semibold ${
-                    averageLatency < 100
-                      ? 'bg-success/15 text-success'
-                      : averageLatency < 300
-                        ? 'bg-warning/15 text-warning'
-                        : 'bg-danger/15 text-danger'
-                  }`}
+                  className={`rounded-md px-2 py-1 text-xs font-semibold ${averageLatency < 100
+                    ? 'bg-success/15 text-success'
+                    : averageLatency < 300
+                      ? 'bg-warning/15 text-warning'
+                      : 'bg-danger/15 text-danger'
+                    }`}
                 >
                   {t('network.latency.average')}: {averageLatency}ms
                 </span>

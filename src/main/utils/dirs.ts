@@ -31,10 +31,6 @@ export function taskDir(): string {
   return dir
 }
 
-export function subStoreDir(): string {
-  return path.join(dataDir(), 'substore')
-}
-
 export function exeDir(): string {
   return path.dirname(exePath())
 }
@@ -69,10 +65,6 @@ export function mihomoCoreDir(): string {
 
 export function mihomoCorePath(core: string): string {
   const isWin = process.platform === 'win32'
-  // 处理 Smart 内核
-  if (core === 'mihomo-smart') {
-    return path.join(mihomoCoreDir(), `mihomo-smart${isWin ? '.exe' : ''}`)
-  }
   return path.join(mihomoCoreDir(), `${core}${isWin ? '.exe' : ''}`)
 }
 
@@ -94,18 +86,6 @@ export function profilesDir(): string {
 
 export function profilePath(id: string): string {
   return path.join(profilesDir(), `${id}.yaml`)
-}
-
-export function overrideDir(): string {
-  return path.join(dataDir(), 'override')
-}
-
-export function overrideConfigPath(): string {
-  return path.join(dataDir(), 'override.yaml')
-}
-
-export function overridePath(id: string, ext: 'js' | 'yaml' | 'log'): string {
-  return path.join(overrideDir(), `${id}.${ext}`)
 }
 
 export function mihomoWorkDir(): string {
@@ -137,16 +117,7 @@ export function logPath(): string {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
-  const name = `clash-party-${year}-${month}-${day}`
-  return path.join(logDir(), `${name}.log`)
-}
-
-export function substoreLogPath(): string {
-  const date = new Date()
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const name = `sub-store-${year}-${month}-${day}`
+  const name = `clash-lite-${year}-${month}-${day}`
   return path.join(logDir(), `${name}.log`)
 }
 
@@ -159,10 +130,3 @@ export function coreLogPath(): string {
   return path.join(logDir(), `${name}.log`)
 }
 
-export function rulesDir(): string {
-  return path.join(dataDir(), 'rules')
-}
-
-export function rulePath(id: string): string {
-  return path.join(rulesDir(), `${id}.yaml`)
-}

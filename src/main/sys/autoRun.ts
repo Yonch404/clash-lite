@@ -8,7 +8,7 @@ import { exePath, homeDir } from '../utils/dirs'
 import { managerLogger } from '../utils/logger'
 import { checkAdminPrivileges } from '../core/admin'
 
-const appName = 'mihomo-party'
+const appName = 'clash-lite'
 
 function getTaskXml(asAdmin: boolean): string {
   const runLevel = asAdmin ? 'HighestAvailable' : 'LeastPrivilege'
@@ -150,13 +150,13 @@ export async function enableAutoRun(): Promise<void> {
   if (process.platform === 'linux') {
     let desktop = `
 [Desktop Entry]
-Name=mihomo-party
+Name=Clash Lite
 Exec=${exePath()} %U
 Terminal=false
 Type=Application
-Icon=mihomo-party
-StartupWMClass=mihomo-party
-Comment=Clash Party
+Icon=clash-lite
+StartupWMClass=clash-lite
+Comment=Clash Lite
 Categories=Utility;
 `
 

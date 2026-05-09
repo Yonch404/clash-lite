@@ -9,9 +9,7 @@ import { app, ipcMain } from 'electron'
 import { mainWindow } from '../window'
 import {
   getAppConfig,
-  getControledMihomoConfig,
-  patchControledMihomoConfig,
-  manageSmartOverride
+  getControledMihomoConfig
 } from '../config'
 import {
   dataDir,
@@ -23,7 +21,6 @@ import {
   mihomoWorkConfigPath,
   mihomoWorkDir
 } from '../utils/dirs'
-import { uploadRuntimeConfig } from '../resolve/gistApi'
 import { startMonitor } from '../resolve/trafficMonitor'
 import { ensureRuntimeFiles, safeShowErrorBox } from '../utils/init'
 import i18next from '../../shared/i18n'
@@ -53,22 +50,15 @@ import {
   validateWindowsPipeAccess,
   waitForCoreReady
 } from './process'
-import { setPublicDNS, recoverDNS } from './dns'
 
 // 重新导出权限相关函数
 export {
   initAdminStatus,
   getSessionAdminStatus,
   checkAdminPrivileges,
-  checkMihomoCorePermissions,
   checkHighPrivilegeCore,
-  grantTunPermissions,
   restartAsAdmin,
-  requestTunPermissions,
-  showTunPermissionDialog,
   showErrorDialog,
-  checkTunPermissions,
-  manualGrantCorePermition
 } from './permissions'
 
 export { getDefaultDevice } from './dns'
@@ -128,13 +118,13 @@ export const getMihomoIpcPath = (): string => {
     const processId = process.pid
 
     return isAdmin
-      ? `\\\\.\\pipe\\MihomoParty\\mihomo-admin-${sessionId}-${processId}`
-      : `\\\\.\\pipe\\MihomoParty\\mihomo-user-${sessionId}-${processId}`
+      ? `\\\\.\\pipe\\ClashLite\\mihomo-admin-${sessionId}-${processId}`
+      : `\\\\.\\pipe\\ClashLite\\mihomo-user-${sessionId}-${processId}`
   }
 
   const uid = process.getuid?.() || 'unknown'
   const processId = process.pid
-  return `/tmp/mihomo-party-${uid}-${processId}.sock`
+  return `/tmp/clash-lite-${uid}-${processId}.sock`
 }
 
 // 核心配置接口
@@ -156,11 +146,10 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
   const [appConfig, mihomoConfig] = await Promise.all([getAppConfig(), getControledMihomoConfig()])
 
   const {
-    core = 'mihomo',
-    autoSetDNS = true,
     diffWorkDir = false,
     mihomoCpuPriority = 'PRIORITY_NORMAL'
   } = appConfig
+  const core = 'mihomo'
 
   const { 'log-level': logLevel = 'info' as LogLevel, tun } = mihomoConfig
 
@@ -177,9 +166,6 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
     }
   }
 
-  // 管理 Smart 内核覆写配置
-  await manageSmartOverride()
-
   // generateProfile 返回实际使用的 current
   const current = await generateProfile()
   await checkProfile(current, core, diffWorkDir)
@@ -187,15 +173,6 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
     await stopCore()
   }
   await cleanupSocketFile()
-
-  // 设置 DNS
-  if (tun?.enable && autoSetDNS) {
-    try {
-      await setPublicDNS()
-    } catch (error) {
-      managerLogger.error('set dns failed', error)
-    }
-  }
 
   // 获取动态 IPC 路径
   const ipcPath = getMihomoIpcPath()
@@ -210,8 +187,8 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
     workDir: diffWorkDir ? mihomoProfileWorkDir(current) : mihomoWorkDir(),
     ipcPath,
     logLevel,
-    tunEnabled: tun?.enable ?? false,
-    autoSetDNS,
+    tunEnabled: tun?.enable ?? true,
+    autoSetDNS: false,
     cpuPriority: mihomoCpuPriority,
     detached
   }
@@ -276,7 +253,6 @@ function setupCoreListeners(
 
     // TUN 权限错误
     if (str.includes('configure tun interface: operation not permitted')) {
-      patchControledMihomoConfig({ tun: { enable: false } })
       mainWindow?.webContents.send('controledMihomoConfigUpdated')
       ipcMain.emit('updateTrayMenu')
       reject(i18next.t('tun.error.tunPermissionDenied'))
@@ -320,13 +296,7 @@ function setupCoreListeners(
                 .toLowerCase()
                 .includes('start initial compatible provider default')
             ) {
-              try {
-                mainWindow?.webContents.send('groupsUpdated')
-                mainWindow?.webContents.send('rulesUpdated')
-                await uploadRuntimeConfig()
-              } catch {
-                // ignore
-              }
+              mainWindow?.webContents.send('groupsUpdated')
               await patchMihomoConfig({ 'log-level': logLevel })
               innerResolve()
             }
@@ -366,13 +336,7 @@ export async function startCore(detached = false, skipStop = false): Promise<Pro
 
 // 停止核心
 export async function stopCore(force = false): Promise<void> {
-  try {
-    if (!force) {
-      await recoverDNS()
-    }
-  } catch (error) {
-    managerLogger.error('recover dns failed', error)
-  }
+  void force
 
   if (child) {
     child.removeAllListeners()

@@ -1,5 +1,5 @@
 import { execFileSync, execSync } from 'child_process'
-import { electronApp, optimizer } from '@electron-toolkit/utils'
+import { electronApp } from '@electron-toolkit/utils'
 import { app, dialog } from 'electron'
 import i18next from 'i18next'
 import { initI18n } from '../shared/i18n'
@@ -16,12 +16,10 @@ import {
 } from './core/manager'
 import { createTray } from './resolve/tray'
 import { init, initBasic, safeShowErrorBox } from './utils/init'
-import { initShortcut } from './resolve/shortcut'
 import { initProfileUpdater } from './core/profileUpdater'
 import { startMonitor } from './resolve/trafficMonitor'
 import { showFloatingWindow } from './resolve/floatingWindow'
 import { logger, createLogger } from './utils/logger'
-import { initWebdavBackupScheduler } from './resolve/backup'
 import {
   createWindow,
   mainWindow,
@@ -194,13 +192,9 @@ const initPromise = (async () => {
 })()
 
 app.whenReady().then(async () => {
-  electronApp.setAppUserModelId('party.mihomo.app')
+  electronApp.setAppUserModelId('lite.clash.app')
 
   const appConfig = await initPromise
-
-  app.on('browser-window-created', (_, window) => {
-    optimizer.watchWindowShortcuts(window)
-  })
 
   registerIpcMainHandlers()
 
@@ -217,7 +211,6 @@ app.whenReady().then(async () => {
       if (startPromises.length > 0) {
         startPromises[0].then(async () => {
           await initProfileUpdater()
-          await initWebdavBackupScheduler()
           await checkAdminRestartForTun()
         })
       }
@@ -238,7 +231,7 @@ app.whenReady().then(async () => {
   await createWindowPromise
 
   const { showFloatingWindow: showFloating = false, disableTray = false } = appConfig
-  const uiTasks: Promise<void>[] = [initShortcut()]
+  const uiTasks: Promise<void>[] = []
 
   if (showFloating) {
     uiTasks.push(

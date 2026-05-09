@@ -1,12 +1,11 @@
 import { Button, Card, CardBody, CardFooter, Chip, Tooltip } from '@heroui/react'
-import { useSortable } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
 import { LuGroup } from 'react-icons/lu'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useGroups } from '@renderer/hooks/use-groups'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
+import { handleSiderCardPointerDown, handleSiderCardPress, siderCardClass } from './sider-card'
 
 interface Props {
   iconOnly?: boolean
@@ -16,35 +15,25 @@ const ProxyCard: React.FC<Props> = (props) => {
   const { t } = useTranslation()
   const { appConfig } = useAppConfig()
   const { iconOnly } = props
-  const { proxyCardStatus = 'col-span-1', disableAnimations = false } = appConfig || {}
+  const { disableAnimations = false } = appConfig || {}
   const location = useLocation()
   const navigate = useNavigate()
   const match = location.pathname.includes('/proxies')
   const { groups = [] } = useGroups()
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform: tf,
-    transition,
-    isDragging
-  } = useSortable({
-    id: 'proxy'
-  })
-  const transform = tf ? { x: tf.x, y: tf.y, scaleX: 1, scaleY: 1 } : null
+  const goToPage = (): void => {
+    void navigate('/proxies')
+  }
 
   if (iconOnly) {
     return (
-      <div className={`${proxyCardStatus} flex justify-center`}>
+      <div className="col-span-2 flex justify-center">
         <Tooltip content={t('proxies.card.title')} placement="right">
           <Button
             size="sm"
             isIconOnly
             color={match ? 'primary' : 'default'}
             variant={match ? 'solid' : 'light'}
-            onPress={() => {
-              navigate('/proxies')
-            }}
+            onPress={goToPage}
           >
             <LuGroup className="text-[20px]" />
           </Button>
@@ -53,21 +42,15 @@ const ProxyCard: React.FC<Props> = (props) => {
     )
   }
   return (
-    <div
-      style={{
-        position: 'relative',
-        transform: CSS.Transform.toString(transform),
-        transition,
-        zIndex: isDragging ? 'calc(infinity)' : undefined
-      }}
-      className={`${proxyCardStatus} proxy-card`}
-    >
+    <div className="col-span-2 proxy-card">
       <Card
+        as="div"
         fullWidth
-        ref={setNodeRef}
-        {...attributes}
-        {...listeners}
-        className={`${match ? 'bg-primary' : 'hover:bg-primary/30'} ${disableAnimations ? '' : `motion-reduce:transition-transform-background ${isDragging ? 'scale-[0.95] tap-highlight-transparent' : ''}`}`}
+        isPressable
+        disableAnimation
+        onPointerDown={(event) => handleSiderCardPointerDown(event, goToPage)}
+        onPress={(event) => handleSiderCardPress(event, goToPage)}
+        className={siderCardClass(match, disableAnimations)}
       >
         <CardBody className="pb-1 pt-0 px-0">
           <div className="flex justify-between">

@@ -8,7 +8,6 @@ import {
   dataDir,
   exePath,
   mihomoCorePath,
-  overridePath,
   profilePath,
   resourcesDir
 } from '../utils/dirs'
@@ -45,13 +44,8 @@ export async function readImageFileDataURL(filePath: string): Promise<string> {
   return `data:${mimeType};base64,${data.toString('base64')}`
 }
 
-export function openFile(type: 'profile' | 'override', id: string, ext?: 'yaml' | 'js'): void {
-  if (type === 'profile') {
-    shell.openPath(profilePath(id))
-  }
-  if (type === 'override') {
-    shell.openPath(overridePath(id, ext || 'js'))
-  }
+export function openFile(type: 'profile', id: string): void {
+  if (type === 'profile') shell.openPath(profilePath(id))
 }
 
 export async function openUWPTool(): Promise<void> {
@@ -77,8 +71,7 @@ export async function setupFirewall(): Promise<void> {
   if (process.platform === 'win32') {
     const rules = [
       { name: 'mihomo', program: mihomoCorePath('mihomo') },
-      { name: 'mihomo-alpha', program: mihomoCorePath('mihomo-alpha') },
-      { name: 'Mihomo Party', program: exePath() }
+      { name: 'Clash Lite', program: exePath() }
     ]
     for (const rule of rules) {
       await execPromise(`netsh advfirewall firewall delete rule name="${rule.name}"`, {

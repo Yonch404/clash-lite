@@ -16,7 +16,7 @@ function logError(message: string, error?: unknown): void {
 async function createFloatingWindow(): Promise<void> {
   try {
     const floatingWindowState = windowStateKeeper({ file: 'floating-window-state.json' })
-    const { customTheme = 'default.css', floatingWindowCompatMode = true } = await getAppConfig()
+    const { floatingWindowCompatMode = true } = await getAppConfig()
 
     const safeMode = process.env.FLOATING_SAFE_MODE === 'true'
     const useCompatMode =
@@ -64,7 +64,7 @@ async function createFloatingWindow(): Promise<void> {
     })
 
     floatingWindow.on('ready-to-show', () => {
-      applyTheme(customTheme)
+      applyTheme()
       floatingWindow?.show()
       floatingWindow?.setAlwaysOnTop(true, 'screen-saver')
     })

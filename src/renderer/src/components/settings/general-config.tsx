@@ -1,52 +1,35 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { toast } from '@renderer/components/base/toast'
 import { Button, Input, Select, SelectItem, Switch, Tab, Tabs, Tooltip } from '@heroui/react'
-import { BiCopy, BiSolidFileImport } from 'react-icons/bi'
+import { BiCopy } from 'react-icons/bi'
 import useSWR from 'swr'
 import {
-  applyTheme,
   checkAutoRun,
   closeFloatingWindow,
   closeTrayIcon,
   copyEnv,
   disableAutoRun,
   enableAutoRun,
-  fetchThemes,
-  getFilePath,
-  importThemes,
   relaunchApp,
-  readImageFileDataURL,
-  resolveThemes,
   showFloatingWindow,
   showTrayIcon,
-  startMonitor,
-  updateTrayIcon,
-  writeTheme
+  startMonitor
 } from '@renderer/utils/ipc'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import debounce from '@renderer/utils/debounce'
 import { platform } from '@renderer/utils/init'
 import { useTheme } from 'next-themes'
-import { IoIosHelpCircle, IoMdCloudDownload } from 'react-icons/io'
-import { MdEditDocument } from 'react-icons/md'
+import { IoIosHelpCircle } from 'react-icons/io'
 import { useTranslation } from 'react-i18next'
 import SettingItem from '../base/base-setting-item'
 import SettingCard from '../base/base-setting-card'
 import BaseConfirmModal from '../base/base-confirm-modal'
-import CSSEditorModal from './css-editor-modal'
-import TrayIconCropModal from './tray-icon-crop-modal'
-
-const rasterTrayIconPattern = /\.(png|jpe?g|webp)$/i
 
 const GeneralConfig: React.FC = () => {
   const { t, i18n } = useTranslation()
   const { data: enable = false, mutate: mutateEnable } = useSWR('checkAutoRun', checkAutoRun)
   const { appConfig, patchAppConfig } = useAppConfig()
-  const [customThemes, setCustomThemes] = useState<{ key: string; label: string }[]>()
-  const [openCSSEditor, setOpenCSSEditor] = useState(false)
-  const [fetching, setFetching] = useState(false)
   const [isRelaunching, setIsRelaunching] = useState(false)
-  const [trayIconCropDataURL, setTrayIconCropDataURL] = useState('')
   const [showHardwareAccelConfirm, setShowHardwareAccelConfirm] = useState(false)
   const [pendingHardwareAccelValue, setPendingHardwareAccelValue] = useState(false)
   const { setTheme } = useTheme()
@@ -58,9 +41,6 @@ const GeneralConfig: React.FC = () => {
     showCurrentProxyInTray = false,
     trayProxyGroupStyle = 'default',
     disableTray = false,
-    swapTrayClick = false,
-    disableTrayIconColor = false,
-    customTrayIcon = '',
     disableAnimations = false,
     showFloatingWindow: showFloating = false,
     spinFloatingIcon = true,
@@ -69,35 +49,15 @@ const GeneralConfig: React.FC = () => {
     useWindowFrame = false,
     autoQuitWithoutCore = false,
     autoQuitWithoutCoreDelay = 60,
-    customTheme = 'default.css',
     envType = [platform === 'win32' ? 'powershell' : 'bash'],
     autoCheckUpdate,
-    githubProxy = 'auto',
     appTheme = 'system',
     language = 'zh-CN',
-    triggerMainWindowBehavior = 'show',
-    hideConnectionCardWave = false
+    triggerMainWindowBehavior = 'show'
   } = appConfig || {}
-
-  useEffect(() => {
-    resolveThemes().then((themes) => {
-      setCustomThemes(themes)
-    })
-  }, [])
 
   return (
     <>
-      {openCSSEditor && (
-        <CSSEditorModal
-          theme={customTheme}
-          onCancel={() => setOpenCSSEditor(false)}
-          onConfirm={async (css: string) => {
-            await writeTheme(customTheme, css)
-            await applyTheme(customTheme)
-            setOpenCSSEditor(false)
-          }}
-        />
-      )}
       {showHardwareAccelConfirm && (
         <BaseConfirmModal
           isOpen={showHardwareAccelConfirm}
@@ -117,17 +77,6 @@ const GeneralConfig: React.FC = () => {
               toast.error(String(e))
               setIsRelaunching(false)
             }
-          }}
-        />
-      )}
-      {trayIconCropDataURL && (
-        <TrayIconCropModal
-          imageDataURL={trayIconCropDataURL}
-          onCancel={() => setTrayIconCropDataURL('')}
-          onConfirm={async (dataURL) => {
-            await patchAppConfig({ customTrayIcon: dataURL })
-            setTrayIconCropDataURL('')
-            await updateTrayIcon()
           }}
         />
       )}
@@ -188,24 +137,6 @@ const GeneralConfig: React.FC = () => {
               patchAppConfig({ autoCheckUpdate: v })
             }}
           />
-        </SettingItem>
-        <SettingItem title={t('settings.githubProxy')} divider>
-          <Select
-            classNames={{ trigger: 'data-[hover=true]:bg-default-200' }}
-            className="w-50"
-            size="sm"
-            selectedKeys={[githubProxy]}
-            aria-label={t('settings.githubProxy')}
-            onSelectionChange={(v) => {
-              patchAppConfig({ githubProxy: Array.from(v)[0] as string })
-            }}
-          >
-            <SelectItem key="auto">{t('settings.githubProxy.auto')}</SelectItem>
-            <SelectItem key="direct">{t('settings.githubProxy.direct')}</SelectItem>
-            <SelectItem key="https://gh-proxy.org">gh-proxy.org</SelectItem>
-            <SelectItem key="https://ghfast.top">ghfast.top</SelectItem>
-            <SelectItem key="https://down.clashparty.org">down.clashparty.org</SelectItem>
-          </Select>
         </SettingItem>
         <SettingItem title={t('settings.silentStart')} divider>
           <Switch
@@ -360,95 +291,7 @@ const GeneralConfig: React.FC = () => {
             }}
           />
         </SettingItem>
-        {!disableTray && (
-          <>
-            <SettingItem title={t('settings.swapTrayClick')} divider>
-              <Switch
-                size="sm"
-                isSelected={swapTrayClick}
-                onValueChange={async (v) => {
-                  await patchAppConfig({ swapTrayClick: v })
-                  closeTrayIcon()
-                  setTimeout(() => {
-                    showTrayIcon()
-                  }, 100)
-                }}
-              />
-            </SettingItem>
-            <SettingItem title={t('settings.disableTrayIconColor')} divider>
-              <Switch
-                size="sm"
-                isSelected={disableTrayIconColor}
-                isDisabled={Boolean(customTrayIcon)}
-                onValueChange={async (v) => {
-                  await patchAppConfig({ disableTrayIconColor: v })
-                  await updateTrayIcon()
-                }}
-              />
-            </SettingItem>
-            <SettingItem
-              title={t('settings.customTrayIcon')}
-              actions={
-                <Tooltip content={t('settings.customTrayIconTooltip')}>
-                  <Button isIconOnly size="sm" variant="light">
-                    <IoIosHelpCircle className="text-lg" />
-                  </Button>
-                </Tooltip>
-              }
-              divider
-            >
-              <div className="flex items-center justify-end gap-2 min-w-0 max-w-[65%]">
-                {customTrayIcon && (
-                  <span
-                    className="truncate text-xs text-default-500"
-                    title={
-                      customTrayIcon.startsWith('data:image/')
-                        ? t('settings.customTrayIconBase64')
-                        : customTrayIcon
-                    }
-                  >
-                    {customTrayIcon.startsWith('data:image/')
-                      ? t('settings.customTrayIconBase64')
-                      : customTrayIcon}
-                  </span>
-                )}
-                <Button
-                  size="sm"
-                  variant="flat"
-                  onPress={async () => {
-                    const files = await getFilePath(
-                      ['png', 'jpg', 'jpeg', 'webp', 'ico', 'icns'],
-                      t('settings.customTrayIconSelect'),
-                      t('settings.customTrayIcon')
-                    )
-                    if (!files?.[0]) return
-                    if (rasterTrayIconPattern.test(files[0])) {
-                      setTrayIconCropDataURL(await readImageFileDataURL(files[0]))
-                      return
-                    }
-                    await patchAppConfig({ customTrayIcon: files[0] })
-                    await updateTrayIcon()
-                  }}
-                >
-                  {t(customTrayIcon ? 'settings.changeTrayIcon' : 'settings.selectTrayIcon')}
-                </Button>
-                {customTrayIcon && (
-                  <Button
-                    size="sm"
-                    variant="light"
-                    onPress={async () => {
-                      await patchAppConfig({ customTrayIcon: '' })
-                      await updateTrayIcon()
-                    }}
-                  >
-                    {t('common.default')}
-                  </Button>
-                )}
-              </div>
-            </SettingItem>
-          </>
-        )}
-        {platform !== 'linux' && (
+        {!disableTray && platform !== 'linux' && (
           <>
             <SettingItem title={t('settings.proxyInTray')} divider>
               <Switch
@@ -485,21 +328,18 @@ const GeneralConfig: React.FC = () => {
                 </SettingItem>
               </>
             )}
-            <SettingItem
-              title={t('settings.showTraffic', {
-                context: platform === 'win32' ? 'windows' : 'mac'
-              })}
-              divider
-            >
-              <Switch
-                size="sm"
-                isSelected={showTraffic}
-                onValueChange={async (v) => {
-                  await patchAppConfig({ showTraffic: v })
-                  await startMonitor()
-                }}
-              />
-            </SettingItem>
+            {platform === 'win32' && (
+              <SettingItem title={t('settings.showTraffic', { context: 'windows' })} divider>
+                <Switch
+                  size="sm"
+                  isSelected={showTraffic}
+                  onValueChange={async (v) => {
+                    await patchAppConfig({ showTraffic: v })
+                    await startMonitor()
+                  }}
+                />
+              </SettingItem>
+            )}
           </>
         )}
         {platform === 'darwin' && (
@@ -543,6 +383,22 @@ const GeneralConfig: React.FC = () => {
             }}
           />
         </SettingItem>
+        <SettingItem title={t('settings.backgroundColor')} divider>
+          <Tabs
+            size="sm"
+            color="primary"
+            selectedKey={appTheme}
+            onSelectionChange={(key) => {
+              const nextTheme = key as AppTheme
+              setTheme(nextTheme)
+              patchAppConfig({ appTheme: nextTheme })
+            }}
+          >
+            <Tab key="system" title={t('settings.backgroundAuto')} />
+            <Tab key="dark" title={t('settings.backgroundDark')} />
+            <Tab key="light" title={t('settings.backgroundLight')} />
+          </Tabs>
+        </SettingItem>
         <SettingItem title={t('settings.triggerMainWindowBehavior')} divider>
           <Tabs
             size="sm"
@@ -555,15 +411,6 @@ const GeneralConfig: React.FC = () => {
             <Tab key="show" title={t('settings.triggerMainWindowBehaviorShow')} />
             <Tab key="toggle" title={t('settings.triggerMainWindowBehaviorToggle')} />
           </Tabs>
-        </SettingItem>
-        <SettingItem title={t('settings.hideConnectionCardWave')} divider>
-          <Switch
-            size="sm"
-            isSelected={hideConnectionCardWave}
-            onValueChange={async (v) => {
-              await patchAppConfig({ hideConnectionCardWave: v })
-            }}
-          />
         </SettingItem>
         <SettingItem
           title={t('settings.disableHardwareAcceleration')}
@@ -586,99 +433,6 @@ const GeneralConfig: React.FC = () => {
               setShowHardwareAccelConfirm(true)
             }}
           />
-        </SettingItem>
-        <SettingItem title={t('settings.backgroundColor')} divider>
-          <Tabs
-            size="sm"
-            color="primary"
-            selectedKey={appTheme}
-            onSelectionChange={(key) => {
-              setTheme(key.toString())
-              patchAppConfig({ appTheme: key as AppTheme })
-            }}
-          >
-            <Tab key="system" title={t('settings.backgroundAuto')} />
-            <Tab key="dark" title={t('settings.backgroundDark')} />
-            <Tab key="light" title={t('settings.backgroundLight')} />
-          </Tabs>
-        </SettingItem>
-        <SettingItem
-          title={t('settings.theme')}
-          actions={
-            <>
-              <Button
-                size="sm"
-                isLoading={fetching}
-                isIconOnly
-                title={t('settings.fetchTheme')}
-                variant="light"
-                onPress={async () => {
-                  setFetching(true)
-                  try {
-                    await fetchThemes()
-                    setCustomThemes(await resolveThemes())
-                  } catch (e) {
-                    toast.error(String(e))
-                  } finally {
-                    setFetching(false)
-                  }
-                }}
-              >
-                <IoMdCloudDownload className="text-lg" />
-              </Button>
-              <Button
-                size="sm"
-                isIconOnly
-                title={t('settings.importTheme')}
-                variant="light"
-                onPress={async () => {
-                  const files = await getFilePath(['css'])
-                  if (!files) return
-                  try {
-                    await importThemes(files)
-                    setCustomThemes(await resolveThemes())
-                  } catch (e) {
-                    toast.error(String(e))
-                  }
-                }}
-              >
-                <BiSolidFileImport className="text-lg" />
-              </Button>
-              <Button
-                size="sm"
-                isIconOnly
-                title={t('settings.editTheme')}
-                variant="light"
-                onPress={async () => {
-                  setOpenCSSEditor(true)
-                }}
-              >
-                <MdEditDocument className="text-lg" />
-              </Button>
-            </>
-          }
-        >
-          {customThemes && (
-            <Select
-              classNames={{ trigger: 'data-[hover=true]:bg-default-200' }}
-              className="w-[60%]"
-              size="sm"
-              selectedKeys={new Set([customTheme])}
-              aria-label={t('settings.selectTheme')}
-              disallowEmptySelection={true}
-              onSelectionChange={async (v) => {
-                try {
-                  await patchAppConfig({ customTheme: v.currentKey as string })
-                } catch (e) {
-                  toast.error(String(e))
-                }
-              }}
-            >
-              {customThemes.map((theme) => (
-                <SelectItem key={theme.key}>{theme.label}</SelectItem>
-              ))}
-            </Select>
-          )}
         </SettingItem>
       </SettingCard>
     </>

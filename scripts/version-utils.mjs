@@ -1,6 +1,12 @@
 import { execSync } from 'child_process'
 import { readFileSync } from 'fs'
 
+const DEFAULT_REPOSITORY_URL = 'https://github.com/Yonch404/clash-lite'
+
+export function getRepositoryUrl() {
+  return (process.env.CLASH_LITE_REPO_URL || DEFAULT_REPOSITORY_URL).replace(/\/$/, '')
+}
+
 // 获取Git commit hash
 export function getGitCommitHash(short = true) {
   try {
@@ -62,27 +68,28 @@ export function getProcessedVersion() {
 
 // 生成下载URL
 export function getDownloadUrl(isDev, version) {
+  const repositoryUrl = getRepositoryUrl()
   if (isDev) {
-    return 'https://github.com/mihomo-party-org/clash-party/releases/download/dev'
+    return `${repositoryUrl}/releases/download/dev`
   } else {
-    return `https://github.com/mihomo-party-org/clash-party/releases/download/v${version}`
+    return `${repositoryUrl}/releases/download/v${version}`
   }
 }
 
 export function generateDownloadLinksMarkdown(downloadUrl, version) {
   let links = '\n### 下载地址：\n\n#### Windows10/11：\n\n'
-  links += `- 安装版：[64位](${downloadUrl}/clash-party-windows-${version}-x64-setup.exe) | [32位](${downloadUrl}/clash-party-windows-${version}-ia32-setup.exe) | [ARM64](${downloadUrl}/clash-party-windows-${version}-arm64-setup.exe)\n\n`
-  links += `- 便携版：[64位](${downloadUrl}/clash-party-windows-${version}-x64-portable.7z) | [32位](${downloadUrl}/clash-party-windows-${version}-ia32-portable.7z) | [ARM64](${downloadUrl}/clash-party-windows-${version}-arm64-portable.7z)\n\n`
+  links += `- 安装版：[64位](${downloadUrl}/clash-lite-windows-${version}-x64-setup.exe) | [32位](${downloadUrl}/clash-lite-windows-${version}-ia32-setup.exe) | [ARM64](${downloadUrl}/clash-lite-windows-${version}-arm64-setup.exe)\n\n`
+  links += `- 便携版：[64位](${downloadUrl}/clash-lite-windows-${version}-x64-portable.7z) | [32位](${downloadUrl}/clash-lite-windows-${version}-ia32-portable.7z) | [ARM64](${downloadUrl}/clash-lite-windows-${version}-arm64-portable.7z)\n\n`
   links += '\n#### Windows7/8：\n\n'
-  links += `- 安装版：[64位](${downloadUrl}/clash-party-win7-${version}-x64-setup.exe) | [32位](${downloadUrl}/clash-party-win7-${version}-ia32-setup.exe)\n\n`
-  links += `- 便携版：[64位](${downloadUrl}/clash-party-win7-${version}-x64-portable.7z) | [32位](${downloadUrl}/clash-party-win7-${version}-ia32-portable.7z)\n\n`
+  links += `- 安装版：[64位](${downloadUrl}/clash-lite-win7-${version}-x64-setup.exe) | [32位](${downloadUrl}/clash-lite-win7-${version}-ia32-setup.exe)\n\n`
+  links += `- 便携版：[64位](${downloadUrl}/clash-lite-win7-${version}-x64-portable.7z) | [32位](${downloadUrl}/clash-lite-win7-${version}-ia32-portable.7z)\n\n`
   links += '\n#### macOS 11+：\n\n'
-  links += `- PKG：[Intel](${downloadUrl}/clash-party-macos-${version}-x64.pkg) | [Apple Silicon](${downloadUrl}/clash-party-macos-${version}-arm64.pkg)\n\n`
+  links += `- PKG：[Intel](${downloadUrl}/clash-lite-macos-${version}-x64.pkg) | [Apple Silicon](${downloadUrl}/clash-lite-macos-${version}-arm64.pkg)\n\n`
   links += '\n#### macOS 10.15+：\n\n'
-  links += `- PKG：[Intel](${downloadUrl}/clash-party-catalina-${version}-x64.pkg) | [Apple Silicon](${downloadUrl}/clash-party-catalina-${version}-arm64.pkg)\n\n`
+  links += `- PKG：[Intel](${downloadUrl}/clash-lite-catalina-${version}-x64.pkg) | [Apple Silicon](${downloadUrl}/clash-lite-catalina-${version}-arm64.pkg)\n\n`
   links += '\n#### Linux：\n\n'
-  links += `- DEB：[64位](${downloadUrl}/clash-party-linux-${version}-amd64.deb) | [ARM64](${downloadUrl}/clash-party-linux-${version}-arm64.deb)\n\n`
-  links += `- RPM：[64位](${downloadUrl}/clash-party-linux-${version}-x86_64.rpm) | [ARM64](${downloadUrl}/clash-party-linux-${version}-aarch64.rpm)`
+  links += `- DEB：[64位](${downloadUrl}/clash-lite-linux-${version}-amd64.deb) | [ARM64](${downloadUrl}/clash-lite-linux-${version}-arm64.deb)\n\n`
+  links += `- RPM：[64位](${downloadUrl}/clash-lite-linux-${version}-x86_64.rpm) | [ARM64](${downloadUrl}/clash-lite-linux-${version}-aarch64.rpm)`
 
   return links
 }

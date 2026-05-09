@@ -83,9 +83,9 @@ async function fallbackTextParsing(stdout: string): Promise<void> {
 export async function cleanupUnixSockets(): Promise<void> {
   try {
     const socketPaths = [
-      '/tmp/mihomo-party.sock',
-      '/tmp/mihomo-party-admin.sock',
-      `/tmp/mihomo-party-${process.getuid?.() || 'user'}.sock`
+      '/tmp/clash-lite.sock',
+      '/tmp/clash-lite-admin.sock',
+      `/tmp/clash-lite-${process.getuid?.() || 'user'}.sock`
     ]
 
     for (const socketPath of socketPaths) {

@@ -1,7 +1,6 @@
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Button } from '@heroui/react'
 import React, { useEffect, useState } from 'react'
 import { getProfileStr, setProfileStr } from '@renderer/utils/ipc'
-import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { BaseEditor } from '../base/base-editor'
 
@@ -13,7 +12,6 @@ interface Props {
 const EditFileModal: React.FC<Props> = (props) => {
   const { id, onClose } = props
   const [currData, setCurrData] = useState('')
-  const navigate = useNavigate()
   const { t } = useTranslation()
 
   useEffect(() => {
@@ -37,21 +35,6 @@ const EditFileModal: React.FC<Props> = (props) => {
         <ModalHeader className="flex pb-0 app-drag">
           <div className="flex justify-start">
             <div className="flex items-center">{t('profiles.editFile.title')}</div>
-            <small className="ml-2 text-foreground-500">
-              {t('profiles.editFile.notice')}
-              <Button
-                size="sm"
-                color="primary"
-                variant="light"
-                className="app-nodrag"
-                onPress={() => {
-                  navigate('/override')
-                }}
-              >
-                {t('profiles.editFile.override')}
-              </Button>
-              {t('profiles.editFile.feature')}
-            </small>
           </div>
         </ModalHeader>
         <ModalBody className="h-full">

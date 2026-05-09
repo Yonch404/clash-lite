@@ -3,9 +3,7 @@ import { toast } from '@renderer/components/base/toast'
 import { Button, Input, Select, SelectItem, Switch, Tooltip } from '@heroui/react'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import debounce from '@renderer/utils/debounce'
-import { getGistUrl, restartCore } from '@renderer/utils/ipc'
-import { MdDeleteForever } from 'react-icons/md'
-import { BiCopy } from 'react-icons/bi'
+import { restartCore } from '@renderer/utils/ipc'
 import { IoIosHelpCircle } from 'react-icons/io'
 import { platform, version } from '@renderer/utils/init'
 import { useTranslation } from 'react-i18next'
@@ -17,15 +15,9 @@ const MihomoConfig: React.FC = () => {
   const { appConfig, patchAppConfig } = useAppConfig()
   const {
     diffWorkDir = false,
-    useHotReloadProfile = false,
-    hotReloadProfileAutoCloseConnection = false,
     delayTestConcurrency,
     delayTestTimeout,
-    githubToken = '',
-    autoCloseConnection = true,
     testProfileOnStart = true,
-    pauseSSID = [],
-    disableDnsOnPauseSSID = false,
     delayTestUrl,
     userAgent,
     subscriptionTimeout = 30000,
@@ -33,7 +25,6 @@ const MihomoConfig: React.FC = () => {
     proxyCols = 'auto'
   } = appConfig || {}
   const [url, setUrl] = useState(delayTestUrl)
-  const [pauseSSIDInput, setPauseSSIDInput] = useState(pauseSSID)
   const setUrlDebounce = debounce((v: string) => {
     patchAppConfig({ delayTestUrl: v })
   }, 500)
@@ -109,41 +100,6 @@ const MihomoConfig: React.FC = () => {
           placeholder={t('mihomo.delayTest.timeoutPlaceholder')}
           onValueChange={(v) => {
             patchAppConfig({ delayTestTimeout: parseInt(v) })
-          }}
-        />
-      </SettingItem>
-      <SettingItem
-        title={t('mihomo.gist.title')}
-        actions={
-          <Button
-            title={t('mihomo.gist.copyUrl')}
-            isIconOnly
-            size="sm"
-            variant="light"
-            onPress={async () => {
-              try {
-                const url = await getGistUrl()
-                if (url !== '') {
-                  await navigator.clipboard.writeText(`${url}/raw/clash-party.yaml`)
-                }
-              } catch (e) {
-                toast.error(String(e))
-              }
-            }}
-          >
-            <BiCopy className="text-lg" />
-          </Button>
-        }
-        divider
-      >
-        <Input
-          type="password"
-          size="sm"
-          className="w-[60%]"
-          value={githubToken}
-          placeholder={t('mihomo.gist.token')}
-          onValueChange={(v) => {
-            patchAppConfig({ githubToken: v })
           }}
         />
       </SettingItem>
@@ -224,56 +180,6 @@ const MihomoConfig: React.FC = () => {
       </SettingItem>
 
       <SettingItem
-        title={t('mihomo.hotReloadProfile.title')}
-        actions={
-          <Tooltip content={t('mihomo.hotReloadProfile.tooltip')}>
-            <Button isIconOnly size="sm" variant="light">
-              <IoIosHelpCircle className="text-lg" />
-            </Button>
-          </Tooltip>
-        }
-        divider
-      >
-        <Switch
-          size="sm"
-          isSelected={useHotReloadProfile}
-          onValueChange={(v) => {
-            patchAppConfig({ useHotReloadProfile: v })
-          }}
-        />
-      </SettingItem>
-
-      <SettingItem
-        title={t('mihomo.hotReloadProfile.autoCloseConnection')}
-        actions={
-          <Tooltip content={t('mihomo.hotReloadProfile.autoCloseConnectionTooltip')}>
-            <Button isIconOnly size="sm" variant="light">
-              <IoIosHelpCircle className="text-lg" />
-            </Button>
-          </Tooltip>
-        }
-        divider
-      >
-        <Switch
-          size="sm"
-          isDisabled={!useHotReloadProfile}
-          isSelected={hotReloadProfileAutoCloseConnection}
-          onValueChange={(v) => {
-            patchAppConfig({ hotReloadProfileAutoCloseConnection: v })
-          }}
-        />
-      </SettingItem>
-
-      <SettingItem title={t('mihomo.autoCloseConnection')} divider>
-        <Switch
-          size="sm"
-          isSelected={autoCloseConnection}
-          onValueChange={(v) => {
-            patchAppConfig({ autoCloseConnection: v })
-          }}
-        />
-      </SettingItem>
-      <SettingItem
         title={t('mihomo.testProfileOnStart')}
         actions={
           <Tooltip content={t('mihomo.testProfileOnStartTooltip')}>
@@ -289,60 +195,6 @@ const MihomoConfig: React.FC = () => {
           isSelected={testProfileOnStart}
           onValueChange={(v) => {
             patchAppConfig({ testProfileOnStart: v })
-          }}
-        />
-      </SettingItem>
-      <SettingItem title={t('mihomo.pauseSSID.title')}>
-        {pauseSSIDInput.join('') !== pauseSSID.join('') && (
-          <Button
-            size="sm"
-            color="primary"
-            onPress={() => {
-              patchAppConfig({ pauseSSID: pauseSSIDInput })
-            }}
-          >
-            {t('common.confirm')}
-          </Button>
-        )}
-      </SettingItem>
-      <div className="flex flex-col items-stretch mt-2">
-        {[...pauseSSIDInput, ''].map((ssid, index) => {
-          return (
-            <div key={index} className="flex mb-2">
-              <Input
-                size="sm"
-                fullWidth
-                placeholder="SSID"
-                value={ssid || ''}
-                onValueChange={(v) => {
-                  if (index === pauseSSIDInput.length) {
-                    setPauseSSIDInput([...pauseSSIDInput, v])
-                  } else {
-                    setPauseSSIDInput(pauseSSIDInput.map((a, i) => (i === index ? v : a)))
-                  }
-                }}
-              />
-              {index < pauseSSIDInput.length && (
-                <Button
-                  className="ml-2"
-                  size="sm"
-                  variant="flat"
-                  color="warning"
-                  onPress={() => setPauseSSIDInput(pauseSSIDInput.filter((_, i) => i !== index))}
-                >
-                  <MdDeleteForever className="text-lg" />
-                </Button>
-              )}
-            </div>
-          )
-        })}
-      </div>
-      <SettingItem title={t('mihomo.disableDnsOnPauseSSID')}>
-        <Switch
-          size="sm"
-          isSelected={disableDnsOnPauseSSID}
-          onValueChange={(v) => {
-            patchAppConfig({ disableDnsOnPauseSSID: v })
           }}
         />
       </SettingItem>

@@ -8,10 +8,8 @@ import {
   mihomoProxyDelay
 } from '@renderer/utils/ipc'
 import { CgDetailsLess, CgDetailsMore } from 'react-icons/cg'
-import { TbCircleLetterD } from 'react-icons/tb'
 import { FaLocationCrosshairs } from 'react-icons/fa6'
-import { RxLetterCaseCapitalize } from 'react-icons/rx'
-import { MdVisibilityOff, MdDoubleArrow, MdOutlineSpeed } from 'react-icons/md'
+import { MdDoubleArrow, MdOutlineSpeed } from 'react-icons/md'
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { GroupedVirtuoso, GroupedVirtuosoHandle } from 'react-virtuoso'
 import ProxyItem from '@renderer/components/proxies/proxy-item'
@@ -88,8 +86,6 @@ const Proxies: React.FC = () => {
   const { appConfig, patchAppConfig } = useAppConfig()
   const {
     proxyDisplayMode = 'simple',
-    proxyDisplayOrder = 'default',
-    autoCloseConnection = true,
     proxyCols = 'auto',
     delayTestConcurrency = 50
   } = appConfig || {}
@@ -106,22 +102,8 @@ const Proxies: React.FC = () => {
     }
   }, [groups.length, searchValue.length])
 
-  // 代理列表排序
-  const sortProxies = useCallback((proxies: (IMihomoProxy | IMihomoGroup)[], order: string) => {
-    if (order === 'delay') {
-      return [...proxies].sort((a, b) => {
-        if (a.history.length === 0) return 1
-        if (b.history.length === 0) return -1
-        const aDelay = a.history[a.history.length - 1].delay
-        const bDelay = b.history[b.history.length - 1].delay
-        if (aDelay === 0) return 1
-        if (bDelay === 0) return -1
-        return aDelay - bDelay
-      })
-    }
-    if (order === 'name') {
-      return [...proxies].sort((a, b) => a.name.localeCompare(b.name))
-    }
+  // 代理列表保持内核返回的原始顺序
+  const sortProxies = useCallback((proxies: (IMihomoProxy | IMihomoGroup)[]) => {
     return proxies
   }, [])
 
@@ -136,22 +118,9 @@ const Proxies: React.FC = () => {
           if (!includesIgnoreCase(proxy.name, searchValue[index])) {
             return false
           }
-          if (appConfig?.hideUnavailableProxies) {
-            const isGroup = 'all' in proxy
-            if (isGroup) {
-              return true
-            }
-            if (!proxy.history || proxy.history.length === 0) {
-              return true
-            }
-            const lastDelay = proxy.history[proxy.history.length - 1].delay
-            if (lastDelay === 0) {
-              return false
-            }
-          }
           return true
         })
-        const sorted = sortProxies(filtered, proxyDisplayOrder)
+        const sorted = sortProxies(filtered)
         const count = Math.ceil(sorted.length / cols)
         groupCounts.push(count)
         allProxies.push(sorted)
@@ -164,22 +133,18 @@ const Proxies: React.FC = () => {
   }, [
     groups,
     isOpen,
-    proxyDisplayOrder,
     cols,
     searchValue,
-    sortProxies,
-    appConfig?.hideUnavailableProxies
+    sortProxies
   ])
 
   const onChangeProxy = useCallback(
     async (group: string, proxy: string): Promise<void> => {
       await mihomoChangeProxy(group, proxy)
-      if (autoCloseConnection) {
-        await mihomoCloseAllConnections()
-      }
+      await mihomoCloseAllConnections()
       mutate()
     },
-    [autoCloseConnection, mutate]
+    [mutate]
   )
 
   const onProxyDelay = useCallback(async (proxy: string, url?: string): Promise<IMihomoDelay> => {
@@ -271,7 +236,7 @@ const Proxies: React.FC = () => {
             localStorage.setItem(groups[index].icon, dataURL)
             mutate()
           })
-          .catch(() => {})
+          .catch(() => { })
       }
       return groups[index] ? (
         <div
@@ -362,7 +327,7 @@ const Proxies: React.FC = () => {
                       }
                       i += Math.floor(
                         allProxies[index].findIndex((proxy) => proxy.name === groups[index].now) /
-                          cols
+                        cols
                       )
                       virtuosoRef.current?.scrollToIndex({
                         index: Math.floor(i),
@@ -470,50 +435,6 @@ const Proxies: React.FC = () => {
       title={t('proxies.title')}
       header={
         <>
-          <Button
-            size="sm"
-            isIconOnly
-            variant="light"
-            className="app-nodrag"
-            onPress={() => {
-              patchAppConfig({
-                hideUnavailableProxies: !appConfig?.hideUnavailableProxies
-              })
-            }}
-          >
-            <MdVisibilityOff
-              className={`text-lg ${appConfig?.hideUnavailableProxies ? 'text-warning' : 'text-foreground-500'}`}
-              title={
-                appConfig?.hideUnavailableProxies
-                  ? t('proxies.hideUnavailable.enabled')
-                  : t('proxies.hideUnavailable.disabled')
-              }
-            />
-          </Button>
-          <Button
-            size="sm"
-            isIconOnly
-            variant="light"
-            className="app-nodrag"
-            onPress={() => {
-              patchAppConfig({
-                proxyDisplayOrder:
-                  proxyDisplayOrder === 'default'
-                    ? 'delay'
-                    : proxyDisplayOrder === 'delay'
-                      ? 'name'
-                      : 'default'
-              })
-            }}
-          >
-            {proxyDisplayOrder === 'default' ? (
-              <TbCircleLetterD className="text-lg" title={t('proxies.order.default')} />
-            ) : proxyDisplayOrder === 'delay' ? (
-              <MdOutlineSpeed className="text-lg" title={t('proxies.order.delay')} />
-            ) : (
-              <RxLetterCaseCapitalize className="text-lg" title={t('proxies.order.name')} />
-            )}
-          </Button>
           <Button
             size="sm"
             isIconOnly

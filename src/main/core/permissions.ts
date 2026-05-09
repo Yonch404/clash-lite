@@ -1,21 +1,17 @@
-import { exec, execFile } from 'child_process'
+import { exec } from 'child_process'
 import { promisify } from 'util'
-import { stat } from 'fs/promises'
 import { existsSync } from 'fs'
 import path from 'path'
 import { app, dialog, ipcMain } from 'electron'
-import { getAppConfig, getControledMihomoConfig, patchControledMihomoConfig } from '../config'
 import { mihomoCorePath, mihomoCoreDir } from '../utils/dirs'
 import { managerLogger } from '../utils/logger'
-import { checkAutoRun, enableAutoRun } from '../sys/autoRun'
 import i18next from '../../shared/i18n'
 import { checkAdminPrivileges } from './admin'
 
 const execPromise = promisify(exec)
-const execFilePromise = promisify(execFile)
 
 // 内核名称白名单
-const ALLOWED_CORES = ['mihomo', 'mihomo-alpha', 'mihomo-smart'] as const
+const ALLOWED_CORES = ['mihomo'] as const
 type AllowedCore = (typeof ALLOWED_CORES)[number]
 type StopCoreBeforeAdminRestart = (force?: boolean) => Promise<void>
 
@@ -47,10 +43,6 @@ export function validateCorePath(corePath: string): void {
   }
 }
 
-function shellEscape(arg: string): string {
-  return "'" + arg.replace(/'/g, "'\\''") + "'"
-}
-
 // 会话管理员状态缓存
 let sessionAdminStatus: boolean | null = null
 
@@ -69,30 +61,9 @@ export function getSessionAdminStatus(): boolean {
 
 export { checkAdminPrivileges } from './admin'
 
-export async function checkMihomoCorePermissions(): Promise<boolean> {
-  const { core = 'mihomo' } = await getAppConfig()
-  const corePath = mihomoCorePath(core)
-
-  try {
-    if (process.platform === 'win32') {
-      return await checkAdminPrivileges()
-    }
-
-    if (process.platform === 'darwin' || process.platform === 'linux') {
-      const stats = await stat(corePath)
-      return (stats.mode & 0o4000) !== 0 && stats.uid === 0
-    }
-  } catch {
-    return false
-  }
-
-  return false
-}
-
 export async function checkHighPrivilegeCore(): Promise<boolean> {
   try {
-    const { core = 'mihomo' } = await getAppConfig()
-    const corePath = mihomoCorePath(core)
+    const corePath = mihomoCorePath('mihomo')
 
     managerLogger.info(`Checking high privilege core: ${corePath}`)
 
@@ -126,10 +97,7 @@ export async function checkHighPrivilegeCore(): Promise<boolean> {
 }
 
 async function checkHighPrivilegeMihomoProcess(): Promise<boolean> {
-  const mihomoExecutables =
-    process.platform === 'win32'
-      ? ['mihomo.exe', 'mihomo-alpha.exe', 'mihomo-smart.exe']
-      : ['mihomo', 'mihomo-alpha', 'mihomo-smart']
+  const mihomoExecutables = process.platform === 'win32' ? ['mihomo.exe'] : ['mihomo']
 
   try {
     if (process.platform === 'win32') {
@@ -211,32 +179,6 @@ async function checkHighPrivilegeMihomoProcess(): Promise<boolean> {
   return false
 }
 
-export async function grantTunPermissions(): Promise<void> {
-  const { core = 'mihomo' } = await getAppConfig()
-
-  if (!isValidCoreName(core)) {
-    throw new Error(`Invalid core name: ${core}. Allowed values: ${ALLOWED_CORES.join(', ')}`)
-  }
-
-  const corePath = mihomoCorePath(core)
-  validateCorePath(corePath)
-
-  if (process.platform === 'darwin') {
-    const escapedPath = shellEscape(corePath)
-    const script = `do shell script "chown root:admin ${escapedPath} && chmod +sx ${escapedPath}" with administrator privileges`
-    await execFilePromise('osascript', ['-e', script])
-  }
-
-  if (process.platform === 'linux') {
-    await execFilePromise('pkexec', ['chown', 'root:root', corePath])
-    await execFilePromise('pkexec', ['chmod', '+sx', corePath])
-  }
-
-  if (process.platform === 'win32') {
-    throw new Error('Windows platform requires running as administrator')
-  }
-}
-
 export async function restartAsAdmin(forTun: boolean = true): Promise<void> {
   if (process.platform !== 'win32') {
     throw new Error('This function is only available on Windows')
@@ -276,40 +218,6 @@ export async function restartAsAdmin(forTun: boolean = true): Promise<void> {
   app.exit(0)
 }
 
-export async function requestTunPermissions(): Promise<void> {
-  if (process.platform === 'win32') {
-    await restartAsAdmin()
-  } else {
-    const hasPermissions = await checkMihomoCorePermissions()
-    if (!hasPermissions) {
-      await grantTunPermissions()
-    }
-  }
-}
-
-export async function showTunPermissionDialog(): Promise<boolean> {
-  managerLogger.info('Preparing TUN permission dialog...')
-
-  const title = i18next.t('tun.permissions.title') || '需要管理员权限'
-  const message =
-    i18next.t('tun.permissions.message') ||
-    '启用 TUN 模式需要管理员权限，是否现在重启应用获取权限？'
-  const confirmText = i18next.t('common.confirm') || '确认'
-  const cancelText = i18next.t('common.cancel') || '取消'
-
-  const choice = dialog.showMessageBoxSync({
-    type: 'warning',
-    title,
-    message,
-    buttons: [confirmText, cancelText],
-    defaultId: 0,
-    cancelId: 1
-  })
-
-  managerLogger.info(`TUN permission dialog choice: ${choice}`)
-  return choice === 0
-}
-
 export async function showErrorDialog(title: string, message: string): Promise<void> {
   const okText = i18next.t('common.confirm') || '确认'
 
@@ -322,72 +230,10 @@ export async function showErrorDialog(title: string, message: string): Promise<v
   })
 }
 
-export async function validateTunPermissionsOnStartup(
-  _restartCore: () => Promise<void>
-): Promise<void> {
-  const { tun } = await getControledMihomoConfig()
-
-  if (!tun?.enable) {
-    return
-  }
-
-  const hasPermissions = await checkMihomoCorePermissions()
-
-  if (!hasPermissions) {
-    // 启动时没有权限，静默禁用 TUN，不弹窗打扰用户
-    managerLogger.warn(
-      'TUN is enabled but insufficient permissions detected, auto-disabling TUN...'
-    )
-    await patchControledMihomoConfig({ tun: { enable: false } })
-
-    const { mainWindow } = await import('../index')
-    mainWindow?.webContents.send('controledMihomoConfigUpdated')
-    ipcMain.emit('updateTrayMenu')
-
-    managerLogger.info('TUN auto-disabled due to insufficient permissions on startup')
-  } else {
-    managerLogger.info('TUN permissions validated successfully')
-  }
-}
-
 export async function checkAdminRestartForTun(restartCore: () => Promise<void>): Promise<void> {
   if (process.argv.includes('--admin-restart-for-tun')) {
-    managerLogger.info('Detected admin restart for TUN mode, auto-enabling TUN...')
-
-    try {
-      if (process.platform === 'win32') {
-        const hasAdminPrivileges = await checkAdminPrivileges()
-        if (hasAdminPrivileges) {
-          await patchControledMihomoConfig({ tun: { enable: true }, dns: { enable: true } })
-
-          const autoRunEnabled = await checkAutoRun()
-          if (autoRunEnabled) {
-            await enableAutoRun()
-          }
-
-          await restartCore()
-
-          managerLogger.info('TUN mode auto-enabled after admin restart')
-
-          const { mainWindow } = await import('../index')
-          mainWindow?.webContents.send('controledMihomoConfigUpdated')
-          ipcMain.emit('updateTrayMenu')
-        } else {
-          managerLogger.warn('Admin restart detected but no admin privileges found')
-        }
-      }
-    } catch (error) {
-      managerLogger.error('Failed to auto-enable TUN after admin restart', error)
-    }
-  } else {
-    await validateTunPermissionsOnStartup(restartCore)
+    managerLogger.info('Detected admin restart flag for TUN mode; restarting core only')
+    await restartCore()
+    ipcMain.emit('updateTrayMenu')
   }
-}
-
-export function checkTunPermissions(): Promise<boolean> {
-  return checkMihomoCorePermissions()
-}
-
-export function manualGrantCorePermition(): Promise<void> {
-  return grantTunPermissions()
 }

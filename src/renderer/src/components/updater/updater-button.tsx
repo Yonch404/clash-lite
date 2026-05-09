@@ -5,6 +5,7 @@ import React, { useState } from 'react'
 import useSWR from 'swr'
 import { platform } from '@renderer/utils/init'
 import { MdNewReleases } from 'react-icons/md'
+import { useTranslation } from 'react-i18next'
 import UpdaterModal from './updater-modal'
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
 }
 
 const UpdaterButton: React.FC<Props> = (props) => {
+  const { t } = useTranslation()
   const { appConfig } = useAppConfig()
   const { iconOnly } = props
   const { autoCheckUpdate, useWindowFrame = false } = appConfig || {}
@@ -58,7 +60,7 @@ const UpdaterButton: React.FC<Props> = (props) => {
             setOpenModal(true)
           }}
         >
-          v{latest.version}
+          {t('common.updater.update')}
         </Button>
       )}
     </>

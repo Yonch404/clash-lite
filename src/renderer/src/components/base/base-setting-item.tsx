@@ -20,7 +20,7 @@ const SettingItem: React.FC<Props> = (props) => {
         </div>
         {children}
       </div>
-      {divider && <Divider className="my-2" />}
+      {divider && <Divider className="my-2 [&:last-child]:hidden" />}
     </>
   )
 }

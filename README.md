@@ -1,43 +1,62 @@
-<h3 align="center">
-  <img height='48px' src='./images/icon-white.png#gh-dark-mode-only'>
-  <img height='48px' src='./images/icon-black.png#gh-light-mode-only'>
-</h3>
+# Clash Lite
 
-<h3 align="center">Another <a href="https://github.com/MetaCubeX/mihomo">Mihomo</a> GUI</h3>
+Clash Lite is a streamlined desktop GUI for [Mihomo](https://github.com/MetaCubeX/mihomo), focused on subscription import, proxy selection, system proxy, TUN mode, connections, logs, tray, and floating-window essentials.
 
-<p align="center">
-  <a href="https://github.com/mihomo-party-org/clash-party/releases">
-    <img src="https://img.shields.io/github/release/mihomo-party-org/clash-party/all.svg">
-  </a>
-  <a href="https://t.me/mihomo_party_group">
-    <img src="https://img.shields.io/badge/Telegram-Group-blue?logo=telegram">
-  </a>
-</p>
-<div align='center'>
-<img width='90%' src="./images/preview.jpg">
-</div>
+Clash Lite is published as an independent application with its own data directory, update channel, package identifiers, and release repository.
 
-### 本项目认证稳定机场推荐：“[狗狗加速](https://party.dginv.click/#/register?code=ARdo0mXx)”
+## Scope
 
-##### [狗狗加速 —— 技术流机场 Doggygo VPN](https://party.dginv.click/#/register?code=ARdo0mXx)
+- Built on the stable Mihomo core.
+- Supports remote and local profiles, profile update, proxy group switching, connection view, logs, and lightweight network status.
+- Keeps TUN mode available from the sidebar, enabled by default for new configurations, and limited to a simple on/off switch plus firewall reset page.
+- Keeps only the stable non-Smart core update flow.
+- Uses the default theme and removes user theme editing and shortcut settings.
+- Removes rules management, external resources, overrides, DNS overrides, sniffer overrides, Sub-Store, WebDAV backup, Gist runtime sync, SSID-based direct mode, and tray click swapping.
 
-- 高性能海外机场，稳定首选，海外团队，无跑路风险
-- Clash Party专属8折优惠码：party，仅有500份
-- Party专属链接注册送 3 天，每天 1G 流量 [免费试用](https://party.dginv.click/#/register?code=ARdo0mXx)
-- 优惠套餐每月仅需 15.8 元，160G 流量，年付 8 折
-- 全球首家支持Hysteria1/2 协议，集群负载均衡设计，高速专线，基于最新UDP quic技术，极低延迟，无视晚高峰，4K 秒开，配合Clash Party食用更省心！
-- 解锁流媒体及 ChatGPT
-- 官网：[https://狗狗加速.com](https://party.dginv.click/#/register?code=ARdo0mXx)
+## Configuration Policy
 
-### 特性
+Clash Lite avoids rewriting subscription-provided runtime settings for removed features. The controlled runtime configuration is limited to the remaining application-owned settings. Removed features have no visible entries and no background runtime hooks.
 
-- [x] 一键 Smart Core 规则覆写，基于 AI 模型自动选择最优节点 详细介绍请看 [这里](https://clashparty.org/docs/guide/smart-core)
-- [x] 开箱即用，无需服务模式的 Tun
-- [x] 多种配色主题可选，UI 焕然一新
-- [x] 支持大部分 Mihomo(Clash Meta) 常用配置修改
-- [x] 内置 Smart内核 与 Mihomo(Clash Meta) 内核
-- [x] 通过 WebDAV 一键备份和恢复配置
-- [x] 强大的覆写功能，任意修订配置文件
-- [x] 深度集成 Sub-Store，轻松管理订阅
+TUN mode defaults to enabled for new controlled configs, but the sidebar switch remains authoritative. If a user turns TUN off, Clash Lite keeps that state instead of forcing it back on.
 
-### 安装/使用指南见 [官方文档](https://clashparty.org)
+## Repository
+
+Official repository:
+
+https://github.com/Yonch404/clash-lite
+
+## Development
+
+Install dependencies:
+
+```bash
+pnpm install
+```
+
+Run static checks:
+
+```bash
+pnpm run lint:check
+pnpm run typecheck
+```
+
+Build packages:
+
+```bash
+pnpm run build:win
+pnpm run build:mac
+pnpm run build:linux
+```
+
+Development server:
+
+```bash
+pnpm run dev
+```
+
+## Project Notes
+
+- Application name: Clash Lite
+- Package name: `clash-lite`
+- Core: Mihomo stable
+- License: follow the upstream project license and third-party dependency licenses.

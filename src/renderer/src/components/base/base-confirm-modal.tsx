@@ -15,7 +15,12 @@ const BaseConfirmModal: React.FC<Props> = (props) => {
   const { title, content, onCancel, onConfirm, isOpen } = props
 
   return (
-    <Modal backdrop="blur" classNames={{ backdrop: 'top-[48px]' }} hideCloseButton isOpen={isOpen}>
+    <Modal
+      backdrop="blur"
+      classNames={{ backdrop: 'top-[48px]' }}
+      hideCloseButton
+      isOpen={isOpen}
+    >
       <ModalContent>
         <ModalHeader className="flex app-drag">{title}</ModalHeader>
         <ModalBody>

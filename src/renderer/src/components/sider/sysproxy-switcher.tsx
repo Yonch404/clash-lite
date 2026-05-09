@@ -3,13 +3,11 @@ import { toast } from '@renderer/components/base/toast'
 import BorderSwitch from '@renderer/components/base/border-swtich'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
-import { triggerSysProxy, updateTrayIconImmediate } from '@renderer/utils/ipc'
-import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-config'
+import { triggerSysProxy, updateTrayIcon } from '@renderer/utils/ipc'
 import { AiOutlineGlobal } from 'react-icons/ai'
 import React from 'react'
-import { useSortable } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
 import { useTranslation } from 'react-i18next'
+import { handleSiderCardPointerDown, handleSiderCardPress, siderCardClass } from './sider-card'
 
 interface Props {
   iconOnly?: boolean
@@ -22,27 +20,13 @@ const SysproxySwitcher: React.FC<Props> = (props) => {
   const navigate = useNavigate()
   const match = location.pathname.includes('/sysproxy')
   const { appConfig, patchAppConfig } = useAppConfig()
-  const { controledMihomoConfig } = useControledMihomoConfig()
-  const { sysProxy, sysproxyCardStatus = 'col-span-1', disableAnimations = false } = appConfig || {}
-  const { tun } = controledMihomoConfig || {}
+  const { sysProxy, disableAnimations = false } = appConfig || {}
   const { enable } = sysProxy || {}
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform: tf,
-    transition,
-    isDragging
-  } = useSortable({
-    id: 'sysproxy'
-  })
-  const transform = tf ? { x: tf.x, y: tf.y, scaleX: 1, scaleY: 1 } : null
+  const goToPage = (): void => {
+    void navigate('/sysproxy')
+  }
   const onChange = async (enable: boolean): Promise<void> => {
     const previousState = !enable
-    const tunEnabled = tun?.enable ?? false
-
-    // 立即更新图标
-    updateTrayIconImmediate(enable, tunEnabled)
 
     try {
       await patchAppConfig({ sysProxy: { enable } })
@@ -50,26 +34,24 @@ const SysproxySwitcher: React.FC<Props> = (props) => {
 
       window.electron.ipcRenderer.send('updateFloatingWindow')
       window.electron.ipcRenderer.send('updateTrayMenu')
+      await updateTrayIcon()
     } catch (e) {
       await patchAppConfig({ sysProxy: { enable: previousState } })
-      // 回滚图标
-      updateTrayIconImmediate(previousState, tunEnabled)
+      await updateTrayIcon()
       toast.error(String(e))
     }
   }
 
   if (iconOnly) {
     return (
-      <div className={`${sysproxyCardStatus} flex justify-center`}>
+      <div className="col-span-1 flex justify-center">
         <Tooltip content={t('sider.cards.systemProxy')} placement="right">
           <Button
             size="sm"
             isIconOnly
             color={match ? 'primary' : 'default'}
             variant={match ? 'solid' : 'light'}
-            onPress={() => {
-              navigate('/sysproxy')
-            }}
+            onPress={goToPage}
           >
             <AiOutlineGlobal className="text-[20px]" />
           </Button>
@@ -79,21 +61,15 @@ const SysproxySwitcher: React.FC<Props> = (props) => {
   }
 
   return (
-    <div
-      style={{
-        position: 'relative',
-        transform: CSS.Transform.toString(transform),
-        transition,
-        zIndex: isDragging ? 'calc(infinity)' : undefined
-      }}
-      className={`${sysproxyCardStatus} sysproxy-card`}
-    >
+    <div className="col-span-1 sysproxy-card">
       <Card
+        as="div"
         fullWidth
-        ref={setNodeRef}
-        {...attributes}
-        {...listeners}
-        className={`${match ? 'bg-primary' : 'hover:bg-primary/30'} ${disableAnimations ? '' : `motion-reduce:transition-transform-background ${isDragging ? 'scale-[0.95] tap-highlight-transparent' : ''}`}`}
+        isPressable
+        disableAnimation
+        onPointerDown={(event) => handleSiderCardPointerDown(event, goToPage)}
+        onPress={(event) => handleSiderCardPress(event, goToPage)}
+        className={siderCardClass(match, disableAnimations)}
       >
         <CardBody className="pb-1 pt-0 px-0">
           <div className="flex justify-between">

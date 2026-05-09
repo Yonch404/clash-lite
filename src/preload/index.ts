@@ -6,24 +6,15 @@ const validInvokeChannels = [
   'mihomoVersion',
   'mihomoCloseConnection',
   'mihomoCloseAllConnections',
-  'mihomoRules',
-  'mihomoRulesDisable',
   'mihomoProxies',
   'mihomoGroups',
   'mihomoProxyProviders',
-  'mihomoUpdateProxyProviders',
-  'mihomoRuleProviders',
-  'mihomoUpdateRuleProviders',
   'mihomoChangeProxy',
   'mihomoUnfixedProxy',
-  'mihomoUpgradeGeo',
   'mihomoUpgrade',
-  'mihomoUpgradeUI',
   'mihomoProxyDelay',
   'mihomoGroupDelay',
   'patchMihomoConfig',
-  'mihomoSmartGroupWeights',
-  'mihomoSmartFlushCache',
   // AutoRun
   'checkAutoRun',
   'enableAutoRun',
@@ -47,24 +38,9 @@ const validInvokeChannels = [
   'changeCurrentProfile',
   'addProfileUpdater',
   'removeProfileUpdater',
-  // Override
-  'getOverrideConfig',
-  'setOverrideConfig',
-  'getOverrideItem',
-  'addOverrideItem',
-  'removeOverrideItem',
-  'updateOverrideItem',
-  'getOverride',
-  'setOverride',
   // File
-  'getFileStr',
-  'setFileStr',
-  'convertMrsRuleset',
   'getRuntimeConfig',
   'getRuntimeConfigStr',
-  'getSmartOverrideContent',
-  'getRuleStr',
-  'setRuleStr',
   'getFilePath',
   'readTextFile',
   'readImageFileDataURL',
@@ -76,16 +52,9 @@ const validInvokeChannels = [
   'quitWithoutCore',
   // System
   'triggerSysProxy',
-  'checkTunPermissions',
-  'grantTunPermissions',
-  'manualGrantCorePermition',
   'checkAdminPrivileges',
   'restartAsAdmin',
-  'checkMihomoCorePermissions',
-  'requestTunPermissions',
   'checkHighPrivilegeCore',
-  'showTunPermissionDialog',
-  'showErrorDialog',
   'openUWPTool',
   'setupFirewall',
   'getInterfaces',
@@ -96,39 +65,15 @@ const validInvokeChannels = [
   'downloadAndInstallUpdate',
   'getVersion',
   'platform',
-  'fetchMihomoTags',
-  'installSpecificMihomoCore',
-  'clearMihomoVersionCache',
   // Backup
-  'webdavBackup',
-  'webdavRestore',
-  'listWebdavBackups',
-  'webdavDelete',
-  'reinitWebdavBackupScheduler',
   'exportLocalBackup',
   'importLocalBackup',
-  // SubStore
-  'startSubStoreFrontendServer',
-  'stopSubStoreFrontendServer',
-  'startSubStoreBackendServer',
-  'stopSubStoreBackendServer',
-  'downloadSubStore',
-  'subStorePort',
-  'subStoreFrontendPort',
-  'subStoreSubs',
-  'subStoreCollections',
   // Theme
-  'resolveThemes',
-  'fetchThemes',
-  'importThemes',
-  'readTheme',
-  'writeTheme',
   'applyTheme',
   // Tray
   'showTrayIcon',
   'closeTrayIcon',
   'updateTrayIcon',
-  'updateTrayIconImmediate',
   // Window
   'showMainWindow',
   'closeMainWindow',
@@ -143,10 +88,7 @@ const validInvokeChannels = [
   'createHeapSnapshot',
   'relaunchApp',
   'quitApp',
-  // Shortcut
-  'registerShortcut',
   // Misc
-  'getGistUrl',
   'fetchIPInfo',
   'measureLatency',
   'getImageDataURL',
@@ -165,12 +107,11 @@ const validListenChannels = [
   'controledMihomoConfigUpdated',
   'profileConfigUpdated',
   'groupsUpdated',
-  'rulesUpdated',
   'updateDownloadProgress'
 ] as const
 
 // 允许的 send channels 白名单
-const validSendChannels = ['updateTrayMenu', 'updateFloatingWindow', 'trayIconUpdate'] as const
+const validSendChannels = ['updateTrayMenu', 'updateFloatingWindow'] as const
 
 type InvokeChannel = (typeof validInvokeChannels)[number]
 type ListenChannel = (typeof validListenChannels)[number]

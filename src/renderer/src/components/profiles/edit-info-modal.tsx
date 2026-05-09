@@ -7,18 +7,11 @@ import {
   ModalFooter,
   Button,
   Input,
-  Switch,
-  Dropdown,
-  DropdownTrigger,
-  DropdownMenu,
-  DropdownItem
+  Switch
 } from '@heroui/react'
 import { toast } from '@renderer/components/base/toast'
 import React, { useState } from 'react'
-import { useOverrideConfig } from '@renderer/hooks/use-override-config'
 import { mihomoHotReloadConfig, addProfileUpdater } from '@renderer/utils/ipc'
-import { MdDeleteForever } from 'react-icons/md'
-import { FaPlus } from 'react-icons/fa6'
 import { useTranslation } from 'react-i18next'
 import { isValidCron } from 'cron-validator'
 import SettingItem from '../base/base-setting-item'
@@ -30,23 +23,16 @@ interface Props {
 }
 const EditInfoModal: React.FC<Props> = (props) => {
   const { item, updateProfileItem, onClose } = props
-  const { overrideConfig } = useOverrideConfig()
-  const { items: overrideItems = [] } = overrideConfig || {}
   const [values, setValues] = useState({
-    ...item
+    ...item,
+    autoUpdate: item.autoUpdate ?? item.type === 'remote'
   })
   const inputWidth = 'w-[400px] md:w-[400px] lg:w-[600px] xl:w-[800px]'
   const { t } = useTranslation()
 
   const onSave = async (): Promise<void> => {
     try {
-      const updatedItem = {
-        ...values,
-        override: values.override?.filter(
-          (i) =>
-            overrideItems.find((t) => t.id === i) && !overrideItems.find((t) => t.id === i)?.global
-        )
-      }
+      const updatedItem: IProfileItem = { ...values }
       await updateProfileItem(updatedItem)
       await addProfileUpdater(updatedItem)
       await mihomoHotReloadConfig()
@@ -129,7 +115,7 @@ const EditInfoModal: React.FC<Props> = (props) => {
               <SettingItem title={t('profiles.editInfo.autoUpdate')}>
                 <Switch
                   size="sm"
-                  isSelected={values.autoUpdate ?? false}
+                  isSelected={values.autoUpdate}
                   onValueChange={(v) => {
                     setValues({ ...values, autoUpdate: v })
                   }}
@@ -146,20 +132,20 @@ const EditInfoModal: React.FC<Props> = (props) => {
                           inputWidth,
                           // 不合法
                           typeof values.interval === 'string' &&
-                            !/^\d+$/.test(values.interval) &&
-                            !isValidCron(values.interval, { seconds: false }) &&
-                            'border-red-500'
+                          !/^\d+$/.test(values.interval) &&
+                          !isValidCron(values.interval, { seconds: false }) &&
+                          'border-red-500'
                         )}
                         value={values.interval?.toString() ?? ''}
                         onValueChange={(v) => {
                           // 输入限制
                           if (/^[\d\s*\-,/]*$/.test(v)) {
-                            // 纯数字
+                            // minute interval
                             if (/^\d+$/.test(v)) {
                               setValues({ ...values, interval: parseInt(v, 10) || 0 })
                               return
                             }
-                            // 非纯数字
+                            // cron expression
                             try {
                               setValues({ ...values, interval: v })
                             } catch {
@@ -176,8 +162,8 @@ const EditInfoModal: React.FC<Props> = (props) => {
                         style={{
                           color:
                             typeof values.interval === 'string' &&
-                            !/^\d+$/.test(values.interval) &&
-                            !isValidCron(values.interval, { seconds: false })
+                              !/^\d+$/.test(values.interval) &&
+                              !isValidCron(values.interval, { seconds: false })
                               ? '#ef4444'
                               : '#6b7280'
                         }}
@@ -222,68 +208,6 @@ const EditInfoModal: React.FC<Props> = (props) => {
               }}
               placeholder={t('profiles.editInfo.updateTimeoutPlaceholder')}
             />
-          </SettingItem>
-          <SettingItem title={t('profiles.editInfo.override.title')}>
-            <div>
-              {overrideItems
-                .filter((i) => i.global)
-                .map((i) => {
-                  return (
-                    <div className="flex mb-2" key={i.id}>
-                      <Button disabled fullWidth variant="flat" size="sm">
-                        {i.name} ({t('profiles.editInfo.override.global')})
-                      </Button>
-                    </div>
-                  )
-                })}
-              {values.override?.map((i) => {
-                if (!overrideItems.find((t) => t.id === i)) return null
-                if (overrideItems.find((t) => t.id === i)?.global) return null
-                return (
-                  <div className="flex mb-2" key={i}>
-                    <Button disabled fullWidth variant="flat" size="sm">
-                      {overrideItems.find((t) => t.id === i)?.name}
-                    </Button>
-                    <Button
-                      color="warning"
-                      variant="flat"
-                      className="ml-2"
-                      size="sm"
-                      onPress={() => {
-                        setValues({
-                          ...values,
-                          override: values.override?.filter((t) => t !== i)
-                        })
-                      }}
-                    >
-                      <MdDeleteForever className="text-lg" />
-                    </Button>
-                  </div>
-                )
-              })}
-              <Dropdown>
-                <DropdownTrigger>
-                  <Button fullWidth size="sm" variant="flat" color="default">
-                    <FaPlus />
-                  </Button>
-                </DropdownTrigger>
-                <DropdownMenu
-                  emptyContent={t('profiles.editInfo.override.noAvailable')}
-                  onAction={(key) => {
-                    setValues({
-                      ...values,
-                      override: Array.from(values.override || []).concat(key.toString())
-                    })
-                  }}
-                >
-                  {overrideItems
-                    .filter((i) => !values.override?.includes(i.id) && !i.global)
-                    .map((i) => (
-                      <DropdownItem key={i.id}>{i.name}</DropdownItem>
-                    ))}
-                </DropdownMenu>
-              </Dropdown>
-            </div>
           </SettingItem>
         </ModalBody>
         <ModalFooter>

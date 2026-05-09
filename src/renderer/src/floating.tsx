@@ -11,7 +11,7 @@ import { ControledMihomoConfigProvider } from './hooks/use-controled-mihomo-conf
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
     <HeroUIProvider>
-      <NextThemesProvider attribute="class" enableSystem defaultTheme="dark">
+      <NextThemesProvider attribute="class" enableSystem defaultTheme="system">
         <BaseErrorBoundary>
           <AppConfigProvider>
             <ControledMihomoConfigProvider>

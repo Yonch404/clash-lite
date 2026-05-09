@@ -1,11 +1,10 @@
 {
-  "name": "mihomo-party",
-  "version": "1.9.5",
-  "description": "Clash Party",
+  "name": "clash-lite",
+  "version": "1.0.0",
+  "description": "Clash Lite",
   "type": "module",
   "main": "./out/main/index.js",
-  "author": "mihomo-party-org",
-  "homepage": "https://clashparty.org",
+  "author": "clash-lite",
   "scripts": {
     "format": "prettier --write .",
     "format:check": "prettier --list-different .",
@@ -20,8 +19,6 @@
     "prepare:dev": "pnpm run hooks:install && node scripts/update-version.mjs && node scripts/prepare.mjs",
     "updater": "node scripts/updater.mjs",
     "checksum": "node scripts/checksum.mjs",
-    "copy-legacy": "node scripts/copy-legacy-artifacts.mjs",
-    "test-copy-legacy": "node scripts/test-copy-legacy.mjs",
     "telegram": "node scripts/telegram.mjs release",
     "telegram:dev": "node scripts/telegram.mjs dev",
     "artifact": "node scripts/artifact.mjs",
@@ -36,14 +33,12 @@
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",
-    "@types/d3": "^7.4.3",
     "@types/plist": "^3.0.5",
     "adm-zip": "^0.5.17",
     "axios": "^1.15.2",
     "chokidar": "^5.0.0",
     "croner": "^9.1.0",
     "crypto-js": "^4.2.0",
-    "d3": "^7.9.0",
     "express": "^5.2.1",
     "file-icon": "^6.0.0",
     "file-icon-info": "^1.1.1",
@@ -55,7 +50,6 @@
     "qrcode.react": "^4.2.0",
     "sysproxy-rs": "file:src\\native\\sysproxy",
     "validator": "^13.15.35",
-    "webdav": "^5.9.0",
     "ws": "^8.20.0",
     "yaml": "^2.8.3"
   },
@@ -84,17 +78,16 @@
     "cron-validator": "^1.4.0",
     "dayjs": "^1.11.20",
     "driver.js": "^1.4.0",
-    "electron": "^41.3.0",
-    "electron-builder": "26.0.12",
+    "electron": "^42.0.1",
+    "electron-builder": "26.8.1",
+    "electron-builder-squirrel-windows": "26.8.1",
     "electron-vite": "4.0.1",
     "electron-window-state": "^5.0.3",
     "eslint": "9.39.2",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "form-data": "^4.0.5",
     "framer-motion": "12.23.26",
-    "lodash": "^4.18.1",
     "meta-json-schema": "^1.19.24",
     "monaco-yaml": "^5.4.1",
     "nanoid": "^5.1.9",
@@ -124,7 +117,11 @@
   "packageManager": "pnpm@10.27.0",
   "pnpm": {
     "onlyBuiltDependencies": [
-      "electron"
+      "@heroui/shared-utils",
+      "electron",
+      "electron-winstaller",
+      "esbuild",
+      "meta-json-schema"
     ]
   }
 }

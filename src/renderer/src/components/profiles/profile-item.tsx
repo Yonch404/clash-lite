@@ -21,7 +21,6 @@ import { openFile } from '@renderer/utils/ipc'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { useTranslation } from 'react-i18next'
 import BaseConfirmModal from '../base/base-confirm-modal'
-import EditRulesModal from './edit-rules-modal'
 import EditInfoModal from './edit-info-modal'
 import EditFileModal from './edit-file-modal'
 import QrCodeModal from './qr-code-modal'
@@ -58,11 +57,10 @@ const ProfileItem: React.FC<Props> = (props) => {
   const usage = (extra?.upload ?? 0) + (extra?.download ?? 0)
   const total = extra?.total ?? 0
   const { appConfig, patchAppConfig } = useAppConfig()
-  const { profileDisplayDate = 'expire' } = appConfig || {}
+  const { profileDisplayDate = 'expire', disableAnimations = false } = appConfig || {}
   const [updating, setUpdating] = useState(false)
   const [openInfoEditor, setOpenInfoEditor] = useState(false)
   const [openFileEditor, setOpenFileEditor] = useState(false)
-  const [openRulesEditor, setOpenRulesEditor] = useState(false)
   const [openQrCode, setOpenQrCode] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
@@ -97,19 +95,23 @@ const ProfileItem: React.FC<Props> = (props) => {
         className: ''
       } as MenuItem,
       {
-        key: 'edit-rules',
-        label: t('profiles.editRules.title'),
+        key: 'open-file',
+        label: t('profiles.openFile'),
         showDivider: false,
         color: 'default',
         className: ''
       } as MenuItem,
-      {
-        key: 'open-file',
-        label: t('profiles.openFile'),
-        showDivider: true,
-        color: 'default',
-        className: ''
-      } as MenuItem,
+      ...(info.type === 'remote' && info.url
+        ? [
+          {
+            key: 'show-qrcode',
+            label: t('profiles.qrCode.show'),
+            showDivider: true,
+            color: 'default',
+            className: ''
+          } as MenuItem
+        ]
+        : []),
       {
         key: 'delete',
         label: t('common.delete'),
@@ -118,15 +120,6 @@ const ProfileItem: React.FC<Props> = (props) => {
         className: 'text-danger'
       } as MenuItem
     ]
-    if (info.type === 'remote' && info.url) {
-      list.unshift({
-        key: 'show-qrcode',
-        label: t('profiles.qrCode.show'),
-        showDivider: false,
-        color: 'default',
-        className: ''
-      } as MenuItem)
-    }
     if (info.home) {
       list.unshift({
         key: 'home',
@@ -147,10 +140,6 @@ const ProfileItem: React.FC<Props> = (props) => {
       }
       case 'edit-file': {
         setOpenFileEditor(true)
-        break
-      }
-      case 'edit-rules': {
-        setOpenRulesEditor(true)
         break
       }
       case 'open-file': {
@@ -213,6 +202,13 @@ const ProfileItem: React.FC<Props> = (props) => {
 
     // 处理卡片选中
     if (!isActuallyDragging && !isDragging && clickStartPos) {
+      const card = e.currentTarget.closest('.profile-card-interactive')
+      if (card instanceof HTMLElement && !card.classList.contains('profile-card-selected')) {
+        card.classList.add('profile-card-committed')
+        window.setTimeout(() => {
+          card.classList.remove('profile-card-committed')
+        }, 1000)
+      }
       onPress()
     }
 
@@ -230,7 +226,6 @@ const ProfileItem: React.FC<Props> = (props) => {
       }}
     >
       {openFileEditor && <EditFileModal id={info.id} onClose={() => setOpenFileEditor(false)} />}
-      {openRulesEditor && <EditRulesModal id={info.id} onClose={() => setOpenRulesEditor(false)} />}
       {openQrCode && info.url && (
         <QrCodeModal url={info.url} onClose={() => setOpenQrCode(false)} />
       )}
@@ -260,7 +255,7 @@ const ProfileItem: React.FC<Props> = (props) => {
         fullWidth
         isPressable={false}
         onContextMenu={handleContextMenu}
-        className={`${isCurrent ? 'bg-primary' : ''} cursor-pointer transition-colors duration-150`}
+        className={`profile-card-interactive ${isCurrent ? 'profile-card-selected' : ''} ${isDragging ? 'profile-card-dragging' : ''} ${disableAnimations ? 'profile-card-no-animation' : ''} !cursor-default shadow-sm`}
       >
         <div
           ref={setNodeRef}
@@ -302,7 +297,10 @@ const ProfileItem: React.FC<Props> = (props) => {
                   </Tooltip>
                 )}
 
-                <Dropdown isOpen={dropdownOpen} onOpenChange={setDropdownOpen}>
+                <Dropdown
+                  isOpen={dropdownOpen}
+                  onOpenChange={setDropdownOpen}
+                >
                   <DropdownTrigger>
                     <Button isIconOnly size="sm" variant="light" color="default">
                       <IoMdMore

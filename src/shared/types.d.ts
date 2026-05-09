@@ -1,7 +1,6 @@
 type OutboundMode = 'rule' | 'global' | 'direct'
 type LogLevel = 'info' | 'debug' | 'warning' | 'error' | 'silent'
 type SysProxyMode = 'auto' | 'manual'
-type CardStatus = 'col-span-2' | 'col-span-1' | 'hidden'
 type AppTheme = 'system' | 'light' | 'dark'
 type MihomoGroupType = 'Selector' | 'URLTest' | 'Fallback' | 'LoadBalance' | 'Relay'
 type Priority =
@@ -66,25 +65,6 @@ interface IMihomoLogInfo {
   type: LogLevel
   payload: string
   time?: string
-}
-
-interface IMihomoRulesInfo {
-  rules: IMihomoRulesDetail[]
-}
-
-interface IMihomoRulesDetail {
-  type: string
-  payload: string
-  proxy: string
-  size: number
-  index: number
-  extra?: {
-    disabled: boolean
-    hitCount: number
-    hitAt: string
-    missCount: number
-    missAt: string
-  }
 }
 
 interface IMihomoConnectionsInfo {
@@ -191,21 +171,6 @@ interface IMihomoMixedGroup extends IMihomoGroup {
   all: (IMihomoProxy | IMihomoGroup)[]
 }
 
-interface IMihomoRuleProviders {
-  providers: Record<string, IMihomoRuleProvider>
-}
-
-interface IMihomoRuleProvider {
-  behavior: string
-  format: string
-  name: string
-  ruleCount: number
-  type: string
-  updatedAt: string
-  vehicleType: string
-  payload?: string[]
-}
-
 interface IMihomoProxyProviders {
   providers: Record<string, IMihomoProxyProvider>
 }
@@ -242,20 +207,11 @@ interface INetworkLatencyTarget {
 }
 
 interface IAppConfig {
-  core: 'mihomo' | 'mihomo-alpha' | 'mihomo-smart' | 'mihomo-specific'
-  specificVersion?: string
-  enableSmartCore: boolean
-  enableSmartOverride: boolean
-  smartCoreUseLightGBM: boolean
-  smartCoreCollectData: boolean
-  smartCoreStrategy: 'sticky-sessions' | 'round-robin'
-  smartCollectorSize?: number
+  core: 'mihomo'
   proxyDisplayMode: 'simple' | 'full'
-  proxyDisplayOrder: 'default' | 'delay' | 'name'
   profileDisplayDate?: 'expire' | 'update'
   envType?: ('bash' | 'cmd' | 'powershell' | 'fish' | 'nushell')[]
   proxyCols: 'auto' | '1' | '2' | '3' | '4'
-  hideUnavailableProxies?: boolean
   connectionDirection: 'asc' | 'desc'
   connectionOrderBy: 'time' | 'upload' | 'download' | 'uploadSpeed' | 'downloadSpeed'
   connectionViewMode?: 'list' | 'table'
@@ -267,55 +223,20 @@ interface IAppConfig {
   displayAppName?: boolean
   spinFloatingIcon?: boolean
   disableTray?: boolean
-  swapTrayClick?: boolean
   showFloatingWindow?: boolean
   floatingWindowCompatMode?: boolean
   disableHardwareAcceleration?: boolean
-  connectionCardStatus?: CardStatus
-  dnsCardStatus?: CardStatus
-  logCardStatus?: CardStatus
-  hideConnectionCardWave?: boolean
-  pauseSSID?: string[]
-  disableDnsOnPauseSSID?: boolean
-  controlDnsBeforePause?: boolean
-  mihomoCoreCardStatus?: CardStatus
-  overrideCardStatus?: CardStatus
-  profileCardStatus?: CardStatus
-  proxyCardStatus?: CardStatus
-  networkCardStatus?: CardStatus
-  resourceCardStatus?: CardStatus
-  ruleCardStatus?: CardStatus
-  sniffCardStatus?: CardStatus
-  substoreCardStatus?: CardStatus
-  sysproxyCardStatus?: CardStatus
-  tunCardStatus?: CardStatus
-  usageCardStatus?: CardStatus
-  githubToken?: string
-  useSubStore: boolean
-  subStoreHost?: string
-  subStoreBackendSyncCron?: string
-  subStoreBackendDownloadCron?: string
-  subStoreBackendUploadCron?: string
   autoQuitWithoutCore?: boolean
   autoQuitWithoutCoreDelay?: number
-  useCustomSubStore?: boolean
-  useProxyInSubStore?: boolean
   mihomoCpuPriority?: Priority
-  customSubStoreUrl?: string
   diffWorkDir?: boolean
-  autoSetDNS?: boolean
-  originDNS?: string
   useWindowFrame: boolean
   proxyInTray: boolean
   showCurrentProxyInTray: boolean
-  siderOrder: string[]
-  siderWidth: number
   appTheme: AppTheme
   customTheme?: string
   autoCheckUpdate: boolean
-  githubProxy?: string
   silentStart: boolean
-  autoCloseConnection: boolean
   sysProxy: ISysProxyConfig
   maxLogDays: number
   maxLogFileSize: number
@@ -326,33 +247,10 @@ interface IAppConfig {
   networkLatencyTargets?: INetworkLatencyTarget[]
   subscriptionTimeout?: number
   encryptedPassword?: number[]
-  controlDns?: boolean
-  controlSniff?: boolean
   useDockIcon?: boolean
   showTraffic?: boolean
-  disableTrayIconColor?: boolean
-  customTrayIcon?: string
   trayProxyGroupStyle?: 'default' | 'submenu'
   disableAnimations?: boolean
-  webdavUrl?: string
-  webdavDir?: string
-  webdavUsername?: string
-  webdavPassword?: string
-  webdavMaxBackups?: number
-  webdavBackupCron?: string
-  webdavIgnoreCert?: boolean
-  useNameserverPolicy: boolean
-  nameserverPolicy: { [key: string]: string | string[] }
-  showWindowShortcut?: string
-  showFloatingWindowShortcut?: string
-  triggerSysProxyShortcut?: string
-  triggerTunShortcut?: string
-  ruleModeShortcut?: string
-  globalModeShortcut?: string
-  directModeShortcut?: string
-  restartAppShortcut?: string
-  quitWithoutCoreShortcut?: string
-  copyEnvShortcut?: string
   language?: 'zh-CN' | 'zh-TW' | 'en-US' | 'ru-RU' | 'fa-IR'
   triggerMainWindowBehavior?: 'show' | 'toggle'
   showMixedPort?: number
@@ -366,8 +264,6 @@ interface IAppConfig {
   showTproxyPort?: number
   enableTproxyPort?: boolean
   testProfileOnStart?: boolean
-  useHotReloadProfile?: boolean
-  hotReloadProfileAutoCloseConnection?: boolean
 }
 
 interface IMihomoTunConfig {
@@ -498,21 +394,6 @@ interface IProfileConfig {
   items: IProfileItem[]
 }
 
-interface IOverrideItem {
-  id: string
-  type: 'remote' | 'local'
-  ext: 'js' | 'yaml'
-  name: string
-  updated: number
-  global?: boolean
-  url?: string
-  file?: string
-}
-
-interface IOverrideConfig {
-  items: IOverrideItem[]
-}
-
 interface ISubscriptionUserInfo {
   upload: number
   download: number
@@ -529,10 +410,8 @@ interface IProfileItem {
   interval?: number | string
   home?: string
   updated?: number
-  override?: string[]
   useProxy?: boolean
   extra?: ISubscriptionUserInfo
-  substore?: boolean
   allowFixedInterval?: boolean
   autoUpdate?: boolean
   authToken?: string
@@ -540,9 +419,3 @@ interface IProfileItem {
   updateTimeout?: number
 }
 
-interface ISubStoreSub {
-  name: string
-  displayName?: string
-  icon?: string
-  tag?: string[]
-}

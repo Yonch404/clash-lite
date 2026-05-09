@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useTheme } from 'next-themes'
 import MihomoIcon from './components/base/mihomo-icon'
 import { calcTraffic } from './utils/calc'
 import { showContextMenu, triggerMainWindow } from './utils/ipc'
@@ -8,13 +9,18 @@ import { useControledMihomoConfig } from './hooks/use-controled-mihomo-config'
 const FloatingApp: React.FC = () => {
   const { appConfig } = useAppConfig()
   const { controledMihomoConfig } = useControledMihomoConfig()
-  const { sysProxy, spinFloatingIcon = true } = appConfig || {}
+  const { sysProxy, spinFloatingIcon = true, appTheme = 'system' } = appConfig || {}
+  const { setTheme } = useTheme()
   const { tun } = controledMihomoConfig || {}
-  const sysProxyEnabled = sysProxy?.enable
-  const tunEnabled = tun?.enable
+  const sysProxyEnabled = sysProxy?.enable ?? false
+  const tunEnabled = controledMihomoConfig ? (tun?.enable ?? true) : false
 
   const [upload, setUpload] = useState(0)
   const [download, setDownload] = useState(0)
+
+  useEffect(() => {
+    setTheme(appTheme)
+  }, [appTheme, setTheme])
 
   // 根据总速率计算旋转速度
   const spinSpeed = useMemo(() => {

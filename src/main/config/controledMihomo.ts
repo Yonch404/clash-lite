@@ -7,7 +7,6 @@ import { patchMihomoConfig } from '../core/mihomoApi'
 import { defaultControledMihomoConfig } from '../utils/template'
 import { deepMerge } from '../utils/merge'
 import { createLogger } from '../utils/logger'
-import { getAppConfig, patchAppConfig } from './app'
 
 const controledMihomoLogger = createLogger('ControledMihomo')
 
@@ -16,6 +15,24 @@ let controledMihomoWriteQueue: Promise<void> = Promise.resolve()
 
 function cloneDefaultControledMihomoConfig(): Partial<IMihomoConfig> {
   return JSON.parse(JSON.stringify(defaultControledMihomoConfig)) as Partial<IMihomoConfig>
+}
+
+function sanitizePatch(patch: Partial<IMihomoConfig>): Partial<IMihomoConfig> {
+  const sanitized = { ...patch }
+
+  delete sanitized.dns
+  delete sanitized.hosts
+  delete sanitized.sniffer
+  delete sanitized['geo-auto-update']
+  delete sanitized['geo-update-interval']
+  delete sanitized['geodata-mode']
+  delete sanitized['geox-url']
+
+  if (sanitized.tun) {
+    sanitized.tun = { enable: sanitized.tun.enable ?? true } as IMihomoTunConfig
+  }
+
+  return sanitized
 }
 
 export async function getControledMihomoConfig(force = false): Promise<Partial<IMihomoConfig>> {
@@ -45,6 +62,22 @@ export async function getControledMihomoConfig(force = false): Promise<Partial<I
         controledMihomoConfig[field] = defaultControledMihomoConfig[field]
       }
     }
+
+    const sanitizedConfig = sanitizePatch(controledMihomoConfig)
+    sanitizedConfig.tun = {
+      enable: sanitizedConfig.tun?.enable ?? true
+    } as IMihomoTunConfig
+
+    if (JSON.stringify(sanitizedConfig) !== JSON.stringify(controledMihomoConfig)) {
+      controledMihomoConfig = sanitizedConfig
+      try {
+        await writeFile(controledMihomoConfigPath(), stringify(controledMihomoConfig), 'utf-8')
+      } catch (error) {
+        controledMihomoLogger.error('Failed to sanitize mihomo.yaml file', error)
+      }
+    } else {
+      controledMihomoConfig = sanitizedConfig
+    }
   }
   if (typeof controledMihomoConfig !== 'object')
     controledMihomoConfig = cloneDefaultControledMihomoConfig()
@@ -53,21 +86,7 @@ export async function getControledMihomoConfig(force = false): Promise<Partial<I
 
 export async function patchControledMihomoConfig(patch: Partial<IMihomoConfig>): Promise<void> {
   controledMihomoWriteQueue = controledMihomoWriteQueue.then(async () => {
-    const appConfig = await getAppConfig()
-    const { controlDns = true, controlSniff = true, controlDnsBeforePause } = appConfig
-
-    // 当模式从 direct 切换到 rule/global 时，恢复之前保存的 DNS 状态
-    const currentMode = controledMihomoConfig?.mode
-    const newMode = patch.mode
-    if (
-      currentMode === 'direct' &&
-      newMode &&
-      newMode !== 'direct' &&
-      controlDnsBeforePause !== undefined
-    ) {
-      // 恢复 DNS 状态并清除保存的状态
-      await patchAppConfig({ controlDns: controlDnsBeforePause, controlDnsBeforePause: undefined })
-    }
+    patch = sanitizePatch(patch)
 
     // 过滤端口字段中的 NaN 值，防止写入无效配置
     const portFields = ['mixed-port', 'socks-port', 'port', 'redir-port', 'tproxy-port'] as const
@@ -77,37 +96,24 @@ export async function patchControledMihomoConfig(patch: Partial<IMihomoConfig>):
       }
     }
 
-    if (patch.hosts) {
-      controledMihomoConfig.hosts = patch.hosts
-    }
-    const replaceNameserverPolicy = Object.prototype.hasOwnProperty.call(
-      patch.dns || {},
-      'nameserver-policy'
-    )
     controledMihomoConfig = deepMerge(controledMihomoConfig, patch)
-    if (replaceNameserverPolicy) {
-      controledMihomoConfig.dns = controledMihomoConfig.dns || {}
-      controledMihomoConfig.dns['nameserver-policy'] = patch.dns?.['nameserver-policy'] ?? {}
-    }
-
-    // 从不接管状态恢复
-    if (controlDns) {
-      // 确保 DNS 配置包含所有必要的默认字段，特别是新增的 fallback 等
-      controledMihomoConfig.dns = deepMerge(
-        cloneDefaultControledMihomoConfig().dns || {},
-        controledMihomoConfig.dns || {}
-      )
-    }
-    if (controlSniff && !controledMihomoConfig.sniffer) {
-      controledMihomoConfig.sniffer = defaultControledMihomoConfig.sniffer
-    }
+    controledMihomoConfig.tun = {
+      enable: controledMihomoConfig.tun?.enable ?? true
+    } as IMihomoTunConfig
+    delete controledMihomoConfig.dns
+    delete controledMihomoConfig.hosts
+    delete controledMihomoConfig.sniffer
+    delete controledMihomoConfig['geo-auto-update']
+    delete controledMihomoConfig['geo-update-interval']
+    delete controledMihomoConfig['geodata-mode']
+    delete controledMihomoConfig['geox-url']
 
     await generateProfile()
     await writeFile(controledMihomoConfigPath(), stringify(controledMihomoConfig), 'utf-8')
 
     // 优先对运行中内核进行热更新，避免无意义重启
     try {
-      await patchMihomoConfig(patch)
+      await patchMihomoConfig(sanitizePatch(patch))
     } catch (error) {
       controledMihomoLogger.warn(
         'Hot patch /configs failed, changes will apply on next restart',

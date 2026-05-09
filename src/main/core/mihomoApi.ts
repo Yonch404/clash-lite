@@ -81,16 +81,6 @@ export const mihomoCloseAllConnections = async (): Promise<void> => {
   return await instance.delete('/connections')
 }
 
-export const mihomoRules = async (): Promise<IMihomoRulesInfo> => {
-  const instance = await getAxios()
-  return await instance.get('/rules')
-}
-
-export const mihomoRulesDisable = async (rules: Record<string, boolean>): Promise<void> => {
-  const instance = await getAxios()
-  return await instance.patch('/rules/disable', rules)
-}
-
 export const mihomoProxies = async (): Promise<IMihomoProxies> => {
   const instance = await getAxios()
   const proxies = (await instance.get('/proxies')) as IMihomoProxies
@@ -134,21 +124,6 @@ export const mihomoProxyProviders = async (): Promise<IMihomoProxyProviders> => 
   return await instance.get('/providers/proxies')
 }
 
-export const mihomoUpdateProxyProviders = async (name: string): Promise<void> => {
-  const instance = await getAxios()
-  return await instance.put(`/providers/proxies/${encodeURIComponent(name)}`)
-}
-
-export const mihomoRuleProviders = async (): Promise<IMihomoRuleProviders> => {
-  const instance = await getAxios()
-  return await instance.get('/providers/rules')
-}
-
-export const mihomoUpdateRuleProviders = async (name: string): Promise<void> => {
-  const instance = await getAxios()
-  return await instance.put(`/providers/rules/${encodeURIComponent(name)}`)
-}
-
 export const mihomoChangeProxy = async (group: string, proxy: string): Promise<IMihomoProxy> => {
   const instance = await getAxios()
   return await instance.put(`/proxies/${encodeURIComponent(group)}`, { name: proxy })
@@ -157,11 +132,6 @@ export const mihomoChangeProxy = async (group: string, proxy: string): Promise<I
 export const mihomoUnfixedProxy = async (group: string): Promise<IMihomoProxy> => {
   const instance = await getAxios()
   return await instance.delete(`/proxies/${encodeURIComponent(group)}`)
-}
-
-export const mihomoUpgradeGeo = async (): Promise<void> => {
-  const instance = await getAxios()
-  return await instance.post('/configs/geo')
 }
 
 export const mihomoProxyDelay = async (proxy: string, url?: string): Promise<IMihomoDelay> => {
@@ -193,11 +163,6 @@ export const mihomoUpgrade = async (): Promise<void> => {
   return await instance.post('/upgrade', undefined, { timeout: 90000 })
 }
 
-export const mihomoUpgradeUI = async (): Promise<void> => {
-  const instance = await getAxios()
-  return await instance.post('/upgrade/ui')
-}
-
 export const mihomoHotReloadConfig = async (): Promise<void> => {
   mihomoApiLogger.info('mihomoHotReloadConfig called')
   const current = await generateProfile()
@@ -207,23 +172,6 @@ export const mihomoHotReloadConfig = async (): Promise<void> => {
   const instance = await getAxios()
   await instance.put('/configs?force=true', { path: configPath })
   mihomoApiLogger.info('hot reload config completed')
-}
-
-// Smart 内核 API
-export const mihomoSmartGroupWeights = async (
-  groupName: string
-): Promise<Record<string, number>> => {
-  const instance = await getAxios()
-  return await instance.get(`/group/${encodeURIComponent(groupName)}/weights`)
-}
-
-export const mihomoSmartFlushCache = async (configName?: string): Promise<void> => {
-  const instance = await getAxios()
-  if (configName) {
-    return await instance.post(`/cache/smart/flush/${encodeURIComponent(configName)}`)
-  } else {
-    return await instance.post('/cache/smart/flush')
-  }
 }
 
 export const startMihomoTraffic = async (): Promise<void> => {
@@ -437,24 +385,4 @@ export async function SysProxyStatus(): Promise<boolean> {
 export const TunStatus = async (): Promise<boolean> => {
   const config = await getControledMihomoConfig()
   return config?.tun?.enable === true
-}
-
-export function calculateTrayIconStatus(
-  sysProxyEnabled: boolean,
-  tunEnabled: boolean
-): 'white' | 'blue' | 'green' | 'red' {
-  if (sysProxyEnabled && tunEnabled) {
-    return 'red' // 系统代理 + TUN 同时启用（警告状态）
-  } else if (sysProxyEnabled) {
-    return 'blue' // 仅系统代理启用
-  } else if (tunEnabled) {
-    return 'green' // 仅 TUN 启用
-  } else {
-    return 'white' // 全关
-  }
-}
-
-export async function getTrayIconStatus(): Promise<'white' | 'blue' | 'green' | 'red'> {
-  const [sysProxyEnabled, tunEnabled] = await Promise.all([SysProxyStatus(), TunStatus()])
-  return calculateTrayIconStatus(sysProxyEnabled, tunEnabled)
 }

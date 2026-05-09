@@ -33,11 +33,7 @@ export async function getAppConfig(force = false): Promise<IAppConfig> {
 
 export async function patchAppConfig(patch: Partial<IAppConfig>): Promise<void> {
   appConfigWriteQueue = appConfigWriteQueue.then(async () => {
-    const replaceNameserverPolicy = Object.prototype.hasOwnProperty.call(patch, 'nameserverPolicy')
     appConfig = deepMerge(appConfig, patch)
-    if (replaceNameserverPolicy) {
-      appConfig.nameserverPolicy = patch.nameserverPolicy ?? {}
-    }
     appConfig.maxLogFileSize = normalizeMaxLogFileSizeMB(appConfig.maxLogFileSize)
     setGlobalMaxLogFileSizeMB(appConfig.maxLogFileSize)
     await writeFile(appConfigPath(), stringify(appConfig))

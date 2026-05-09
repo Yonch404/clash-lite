@@ -1,5 +1,4 @@
 import { Tabs, Tab } from '@heroui/react'
-import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-config'
 import { useGroups } from '@renderer/hooks/use-groups'
 import { mihomoCloseAllConnections, patchMihomoConfig, updateTrayIcon } from '@renderer/utils/ipc'
@@ -10,16 +9,12 @@ const OutboundModeSwitcher: React.FC = () => {
   const { t } = useTranslation()
   const { controledMihomoConfig, patchControledMihomoConfig } = useControledMihomoConfig()
   const { mutate: mutateGroups } = useGroups()
-  const { appConfig } = useAppConfig()
-  const { autoCloseConnection = true } = appConfig || {}
   const { mode } = controledMihomoConfig || {}
 
   const onChangeMode = async (mode: OutboundMode): Promise<void> => {
     await patchControledMihomoConfig({ mode })
     await patchMihomoConfig({ mode })
-    if (autoCloseConnection) {
-      await mihomoCloseAllConnections()
-    }
+    await mihomoCloseAllConnections()
     mutateGroups()
     window.electron.ipcRenderer.send('updateTrayMenu')
     await updateTrayIcon()

@@ -415,11 +415,6 @@ const resolveSubstore = () =>
     downloadURL:
       'https://github.com/sub-store-org/Sub-Store/releases/latest/download/sub-store.bundle.js'
   })
-const resolveHelper = () =>
-  resolveResource({
-    file: 'party.mihomo.helper',
-    downloadURL: `https://github.com/mihomo-party-org/mihomo-party-helper/releases/download/${arch}/party.mihomo.helper`
-  })
 const resolveSubstoreFrontend = async () => {
   const tempDir = path.join(TEMP_DIR, 'substore-frontend')
   const tempZip = path.join(tempDir, 'dist.zip')
@@ -514,12 +509,6 @@ const tasks = [
     retry: 5,
     winOnly: true
   },
-  {
-    name: 'helper',
-    func: resolveHelper,
-    retry: 5,
-    darwinOnly: true
-  }
 ]
 
 async function runTask() {

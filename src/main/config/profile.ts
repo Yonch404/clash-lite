@@ -1,22 +1,18 @@
-import { access, readFile, rm, unlink, writeFile } from 'fs/promises'
+import { access, readFile, rm, writeFile } from 'fs/promises'
 import { constants, existsSync } from 'fs'
-import { exec, execFile } from 'child_process'
-import { isAbsolute, join, relative, resolve } from 'path'
+import { execFile } from 'child_process'
+import { isAbsolute, relative, resolve } from 'path'
 import { promisify } from 'util'
-import { randomBytes } from 'crypto'
-import { tmpdir } from 'os'
 import { app } from 'electron'
 import i18next from 'i18next'
 import * as chromeRequest from '../utils/chromeRequest'
 import { parse, stringify } from '../utils/yaml'
 import { defaultProfile } from '../utils/template'
-import { subStorePort } from '../resolve/server'
-import { mihomoCloseAllConnections, mihomoHotReloadConfig } from '../core/mihomoApi'
+import { mihomoHotReloadConfig } from '../core/mihomoApi'
 import { restartCore } from '../core/manager'
 import { generateProfile } from '../core/factory'
 import { addProfileUpdater, removeProfileUpdater } from '../core/profileUpdater'
 import {
-  mihomoCorePath,
   mihomoProfileWorkDir,
   mihomoWorkDir,
   profileConfigPath,
@@ -141,20 +137,7 @@ export async function changeCurrentProfile(id: string): Promise<void> {
           config.current = id
           return config
         })
-        const { useHotReloadProfile = false, hotReloadProfileAutoCloseConnection = false } =
-          await getAppConfig()
-        if (useHotReloadProfile) {
-          await mihomoHotReloadConfig()
-          if (hotReloadProfileAutoCloseConnection) {
-            try {
-              await mihomoCloseAllConnections()
-            } catch (error) {
-              profileLogger.warn('Failed to close connections after profile hot reload', error)
-            }
-          }
-        } else {
-          await restartCore()
-        }
+        await restartCore()
       } catch (e) {
         // 回滚配置
         await updateProfileConfig((config) => {
@@ -258,7 +241,6 @@ interface FetchOptions {
   userAgent: string
   authToken?: string
   timeout: number
-  substore: boolean
 }
 
 interface FetchResult {
@@ -270,7 +252,7 @@ const MAX_TIMER_DELAY_MS = 2_147_483_647
 const MAX_PROFILE_INTERVAL_MINUTES = Math.floor(MAX_TIMER_DELAY_MS / (60 * 1000))
 
 async function fetchAndValidateSubscription(options: FetchOptions): Promise<FetchResult> {
-  const { url, useProxy, mixedPort, userAgent, authToken, timeout, substore } = options
+  const { url, useProxy, mixedPort, userAgent, authToken, timeout } = options
 
   const headers: Record<string, string> = {
     'User-Agent': userAgent,
@@ -278,29 +260,19 @@ async function fetchAndValidateSubscription(options: FetchOptions): Promise<Fetc
   }
   if (authToken) headers['Authorization'] = authToken
 
-  let res: chromeRequest.Response<string>
-  if (substore) {
-    const urlObj = new URL(`http://127.0.0.1:${subStorePort}${url}`)
-    urlObj.searchParams.set('target', 'ClashMeta')
-    urlObj.searchParams.set('noCache', 'true')
-    if (useProxy) {
-      urlObj.searchParams.set('proxy', `http://127.0.0.1:${mixedPort}`)
-    }
-    res = await chromeRequest.get(urlObj.toString(), { headers, responseType: 'text', timeout })
-  } else {
-    res = await chromeRequest.get(url, {
-      headers,
-      responseType: 'text',
-      timeout,
-      proxy: useProxy ? { protocol: 'http', host: '127.0.0.1', port: mixedPort } : false
-    })
-  }
+  const res = await chromeRequest.get(url, {
+    headers,
+    responseType: 'text',
+    timeout,
+    proxy: useProxy ? { protocol: 'http', host: '127.0.0.1', port: mixedPort } : false
+  })
 
   if (res.status < 200 || res.status >= 300) {
     throw new Error(`Subscription failed: Request status code ${res.status}`)
   }
 
-  const parsed = parse(res.data) as Record<string, unknown> | null
+  const data = String(res.data)
+  const parsed = parse(data) as Record<string, unknown> | null
   if (typeof parsed !== 'object' || parsed === null) {
     throw new Error('Subscription failed: Profile is not a valid YAML')
   }
@@ -308,22 +280,21 @@ async function fetchAndValidateSubscription(options: FetchOptions): Promise<Fetc
     throw new Error('Subscription failed: Profile missing proxies or providers')
   }
 
-  return { data: res.data, headers: res.headers }
+  return { data, headers: res.headers }
 }
 
 export async function createProfile(item: Partial<IProfileItem>): Promise<IProfileItem> {
   const id = item.id || new Date().getTime().toString(16)
+  const type = item.type || 'local'
   const newItem: IProfileItem = {
     id,
-    name: item.name || (item.type === 'remote' ? 'Remote File' : 'Local File'),
-    type: item.type || 'local',
+    name: item.name || (type === 'remote' ? 'Remote File' : 'Local File'),
+    type,
     url: item.url,
-    substore: item.substore || false,
     interval: item.interval || 0,
-    override: item.override || [],
     useProxy: item.useProxy || false,
     allowFixedInterval: item.allowFixedInterval || false,
-    autoUpdate: item.autoUpdate ?? false,
+    autoUpdate: item.autoUpdate ?? type === 'remote',
     authToken: item.authToken,
     userAgent: item.userAgent,
     updated: new Date().getTime(),
@@ -355,16 +326,15 @@ export async function createProfile(item: Partial<IProfileItem>): Promise<IProfi
     const baseOptions: Omit<FetchOptions, 'useProxy' | 'timeout'> = {
       url: profileUrl,
       mixedPort,
-      userAgent: item.userAgent || userAgent || `mihomo.party/v${app.getVersion()} (clash.meta)`,
-      authToken: item.authToken,
-      substore: newItem.substore || false
+      userAgent: item.userAgent || userAgent || `clash-lite/v${app.getVersion()} (clash.meta)`,
+      authToken: item.authToken
     }
 
     const fetchSub = (useProxy: boolean, timeout: number): Promise<FetchResult> =>
       fetchAndValidateSubscription({ ...baseOptions, useProxy, timeout })
 
     let result: FetchResult
-    if (newItem.useProxy || newItem.substore) {
+    if (newItem.useProxy) {
       result = await fetchSub(Boolean(newItem.useProxy), userItemTimeoutMs)
     } else {
       try {
@@ -491,68 +461,3 @@ function parseSubinfo(str: string): ISubscriptionUserInfo {
   return obj
 }
 
-function isAbsolutePath(path: string): boolean {
-  return path.startsWith('/') || /^[a-zA-Z]:\\/.test(path)
-}
-
-export async function getFileStr(path: string): Promise<string> {
-  const { diffWorkDir = false } = await getAppConfig()
-  const { current } = await getProfileConfig()
-  if (isAbsolutePath(path)) {
-    return await readFile(path, 'utf-8')
-  } else {
-    return await readFile(
-      join(diffWorkDir ? mihomoProfileWorkDir(current) : mihomoWorkDir(), path),
-      'utf-8'
-    )
-  }
-}
-
-export async function setFileStr(path: string, content: string): Promise<void> {
-  const { diffWorkDir = false } = await getAppConfig()
-  const { current } = await getProfileConfig()
-  if (isAbsolutePath(path)) {
-    await writeFile(path, content, 'utf-8')
-  } else {
-    await writeFile(
-      join(diffWorkDir ? mihomoProfileWorkDir(current) : mihomoWorkDir(), path),
-      content,
-      'utf-8'
-    )
-  }
-}
-
-export async function convertMrsRuleset(filePath: string, behavior: string): Promise<string> {
-  const execAsync = promisify(exec)
-
-  const { core = 'mihomo' } = await getAppConfig()
-  const corePath = mihomoCorePath(core)
-  const { diffWorkDir = false } = await getAppConfig()
-  const { current } = await getProfileConfig()
-  let fullPath: string
-  if (isAbsolutePath(filePath)) {
-    fullPath = filePath
-  } else {
-    fullPath = join(diffWorkDir ? mihomoProfileWorkDir(current) : mihomoWorkDir(), filePath)
-  }
-
-  const tempFileName = `mrs-convert-${randomBytes(8).toString('hex')}.txt`
-  const tempFilePath = join(tmpdir(), tempFileName)
-
-  try {
-    // 使用 mihomo convert-ruleset 命令转换 MRS 文件为 text 格式
-    // 命令格式：mihomo convert-ruleset <behavior> <format> <source>
-    await execAsync(`"${corePath}" convert-ruleset ${behavior} mrs "${fullPath}" "${tempFilePath}"`)
-    const content = await readFile(tempFilePath, 'utf-8')
-    await unlink(tempFilePath)
-
-    return content
-  } catch (error) {
-    try {
-      await unlink(tempFilePath)
-    } catch {
-      // ignore
-    }
-    throw error
-  }
-}

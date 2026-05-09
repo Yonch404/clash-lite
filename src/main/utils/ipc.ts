@@ -1,6 +1,5 @@
 import path from 'path'
 import v8 from 'v8'
-import { readFile, writeFile } from 'fs/promises'
 import { app, ipcMain } from 'electron'
 import i18next from 'i18next'
 import {
@@ -12,20 +11,11 @@ import {
   mihomoProxies,
   mihomoProxyDelay,
   mihomoProxyProviders,
-  mihomoRuleProviders,
-  mihomoRules,
   mihomoUnfixedProxy,
-  mihomoUpdateProxyProviders,
-  mihomoUpdateRuleProviders,
   mihomoUpgrade,
-  mihomoUpgradeGeo,
-  mihomoUpgradeUI,
   mihomoHotReloadConfig,
   mihomoVersion,
-  patchMihomoConfig,
-  mihomoSmartGroupWeights,
-  mihomoSmartFlushCache,
-  mihomoRulesDisable
+  patchMihomoConfig
 } from '../core/mihomoApi'
 import { checkAutoRun, disableAutoRun, enableAutoRun } from '../sys/autoRun'
 import {
@@ -40,43 +30,16 @@ import {
   removeProfileItem,
   changeCurrentProfile,
   getProfileStr,
-  getFileStr,
-  setFileStr,
   setProfileStr,
   updateProfileItem,
-  setProfileConfig,
-  getOverrideConfig,
-  setOverrideConfig,
-  getOverrideItem,
-  addOverrideItem,
-  removeOverrideItem,
-  getOverride,
-  setOverride,
-  updateOverrideItem,
-  convertMrsRuleset
+  setProfileConfig
 } from '../config'
-import {
-  startSubStoreFrontendServer,
-  startSubStoreBackendServer,
-  stopSubStoreFrontendServer,
-  stopSubStoreBackendServer,
-  downloadSubStore,
-  subStoreFrontendPort,
-  subStorePort
-} from '../resolve/server'
 import {
   quitWithoutCore,
   restartCore,
-  checkTunPermissions,
-  grantTunPermissions,
-  manualGrantCorePermition,
   checkAdminPrivileges,
   restartAsAdmin,
-  checkMihomoCorePermissions,
-  requestTunPermissions,
-  checkHighPrivilegeCore,
-  showTunPermissionDialog,
-  showErrorDialog
+  checkHighPrivilegeCore
 } from '../core/manager'
 import { triggerSysProxy } from '../sys/sysproxy'
 import { checkUpdate, downloadAndInstallUpdate } from '../resolve/autoUpdater'
@@ -92,34 +55,18 @@ import {
 } from '../sys/misc'
 import { getRuntimeConfig, getRuntimeConfigStr } from '../core/factory'
 import {
-  listWebdavBackups,
-  webdavBackup,
-  webdavDelete,
-  webdavRestore,
   exportLocalBackup,
-  importLocalBackup,
-  reinitScheduler
+  importLocalBackup
 } from '../resolve/backup'
 import { getInterfaces } from '../sys/interface'
 import {
   closeTrayIcon,
   copyEnv,
   showTrayIcon,
-  updateTrayIcon,
-  updateTrayIconImmediate
+  updateTrayIcon
 } from '../resolve/tray'
-import { registerShortcut } from '../resolve/shortcut'
 import { closeMainWindow, mainWindow, showMainWindow, triggerMainWindow } from '../window'
-import {
-  applyTheme,
-  fetchThemes,
-  importThemes,
-  readTheme,
-  resolveThemes,
-  writeTheme
-} from '../resolve/theme'
-import { subStoreCollections, subStoreSubs } from '../core/subStoreApi'
-import { getGistUrl } from '../resolve/gistApi'
+import { applyTheme } from '../resolve/theme'
 import { startMonitor } from '../resolve/trafficMonitor'
 import { closeFloatingWindow, showContextMenu, showFloatingWindow } from '../resolve/floatingWindow'
 import { addProfileUpdater, removeProfileUpdater } from '../core/profileUpdater'
@@ -127,8 +74,7 @@ import { getImageDataURL } from './image'
 import { get as httpGet } from './chromeRequest'
 import { getIconDataURL } from './icon'
 import { getAppName } from './appName'
-import { logDir, rulePath } from './dirs'
-import { installMihomoCore, getGitHubTags, clearVersionCache } from './github'
+import { logDir } from './dirs'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AsyncFn = (...args: any[]) => Promise<any>
@@ -157,38 +103,6 @@ function registerHandlers(handlers: Record<string, AsyncFn | SyncFn>, async = tr
     } else {
       ipcMain.handle(channel, (_e, ...args) => (handler as SyncFn)(...args))
     }
-  }
-}
-
-async function fetchMihomoTags(
-  forceRefresh = false
-): Promise<{ name: string; zipball_url: string; tarball_url: string }[]> {
-  return await getGitHubTags('MetaCubeX', 'mihomo', forceRefresh)
-}
-
-async function installSpecificMihomoCore(version: string): Promise<void> {
-  clearVersionCache('MetaCubeX', 'mihomo')
-  return await installMihomoCore(version)
-}
-
-async function clearMihomoVersionCache(): Promise<void> {
-  clearVersionCache('MetaCubeX', 'mihomo')
-}
-
-async function getRuleStr(id: string): Promise<string> {
-  return await readFile(rulePath(id), 'utf-8')
-}
-
-async function setRuleStr(id: string, str: string): Promise<void> {
-  await writeFile(rulePath(id), str, 'utf-8')
-}
-
-async function getSmartOverrideContent(): Promise<string | null> {
-  try {
-    const override = await getOverrideItem('smart-core-override')
-    return override?.file || null
-  } catch {
-    return null
   }
 }
 
@@ -223,24 +137,15 @@ const asyncHandlers: Record<string, AsyncFn> = {
   mihomoVersion,
   mihomoCloseConnection,
   mihomoCloseAllConnections,
-  mihomoRules,
-  mihomoRulesDisable,
   mihomoProxies,
   mihomoGroups,
   mihomoProxyProviders,
-  mihomoUpdateProxyProviders,
-  mihomoRuleProviders,
-  mihomoUpdateRuleProviders,
   mihomoChangeProxy,
   mihomoUnfixedProxy,
-  mihomoUpgradeGeo,
   mihomoUpgrade,
-  mihomoUpgradeUI,
   mihomoProxyDelay,
   mihomoGroupDelay,
   patchMihomoConfig,
-  mihomoSmartGroupWeights,
-  mihomoSmartFlushCache,
   // AutoRun
   checkAutoRun,
   enableAutoRun,
@@ -263,24 +168,9 @@ const asyncHandlers: Record<string, AsyncFn> = {
   changeCurrentProfile,
   addProfileUpdater,
   removeProfileUpdater,
-  // Override
-  getOverrideConfig,
-  setOverrideConfig,
-  getOverrideItem,
-  addOverrideItem,
-  removeOverrideItem,
-  updateOverrideItem,
-  getOverride,
-  setOverride,
   // File
-  getFileStr,
-  setFileStr,
-  convertMrsRuleset,
   getRuntimeConfig,
   getRuntimeConfigStr,
-  getSmartOverrideContent,
-  getRuleStr,
-  setRuleStr,
   readTextFile,
   // Core
   restartCore,
@@ -289,47 +179,19 @@ const asyncHandlers: Record<string, AsyncFn> = {
   quitWithoutCore,
   // System
   triggerSysProxy,
-  checkTunPermissions,
-  grantTunPermissions,
-  manualGrantCorePermition,
   checkAdminPrivileges,
   restartAsAdmin,
-  checkMihomoCorePermissions,
-  requestTunPermissions,
   checkHighPrivilegeCore,
-  showTunPermissionDialog,
-  showErrorDialog,
   openUWPTool,
   setupFirewall,
   copyEnv,
   // Update
   checkUpdate,
   downloadAndInstallUpdate,
-  fetchMihomoTags,
-  installSpecificMihomoCore,
-  clearMihomoVersionCache,
   // Backup
-  webdavBackup,
-  webdavRestore,
-  listWebdavBackups,
-  webdavDelete,
-  reinitWebdavBackupScheduler: reinitScheduler,
   exportLocalBackup,
   importLocalBackup,
-  // SubStore
-  startSubStoreFrontendServer,
-  stopSubStoreFrontendServer,
-  startSubStoreBackendServer,
-  stopSubStoreBackendServer,
-  downloadSubStore,
-  subStoreSubs,
-  subStoreCollections,
   // Theme
-  resolveThemes,
-  fetchThemes,
-  importThemes,
-  readTheme,
-  writeTheme,
   applyTheme,
   // Tray
   showTrayIcon,
@@ -340,7 +202,6 @@ const asyncHandlers: Record<string, AsyncFn> = {
   closeFloatingWindow,
   showContextMenu,
   // Misc
-  getGistUrl,
   fetchIPInfo,
   measureLatency,
   getImageDataURL,
@@ -348,8 +209,7 @@ const asyncHandlers: Record<string, AsyncFn> = {
   getIconDataURL,
   getAppName,
   changeLanguage,
-  setTitleBarOverlay,
-  registerShortcut
+  setTitleBarOverlay
 }
 
 const syncHandlers: Record<string, SyncFn> = {
@@ -360,9 +220,6 @@ const syncHandlers: Record<string, SyncFn> = {
   setNativeTheme,
   getVersion: () => app.getVersion(),
   platform: () => process.platform,
-  subStorePort: () => subStorePort,
-  subStoreFrontendPort: () => subStoreFrontendPort,
-  updateTrayIconImmediate,
   showMainWindow,
   closeMainWindow,
   triggerMainWindow,

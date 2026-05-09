@@ -10,43 +10,16 @@ import i18next from 'i18next'
 import { mainWindow } from '../window'
 import { appLogger } from '../utils/logger'
 import { dataDir, exeDir, exePath, isPortable, resourcesFilesDir } from '../utils/dirs'
-import { getAppConfig, getControledMihomoConfig } from '../config'
+import { getControledMihomoConfig } from '../config'
 import { checkAdminPrivileges } from '../core/manager'
 import { parse } from '../utils/yaml'
 import * as chromeRequest from '../utils/chromeRequest'
 
-const GITHUB_PROXIES = ['https://gh-proxy.org', 'https://ghfast.top', 'https://down.clashparty.org']
-
-function buildDownloadUrls(githubUrl: string, proxyPref = ''): string[] {
-  if (proxyPref === 'direct') return [githubUrl]
-  if (proxyPref && proxyPref !== 'auto') return [`${proxyPref}/${githubUrl}`]
-  // auto: try each proxy then fall back to direct
-  return [...GITHUB_PROXIES.map((p) => `${p}/${githubUrl}`), githubUrl]
-}
-
-async function tryDownload(
-  urls: string[],
-  options: Parameters<typeof chromeRequest.get>[1]
-): Promise<Awaited<ReturnType<typeof chromeRequest.get>>> {
-  let lastError: unknown
-  for (const url of urls) {
-    try {
-      return await chromeRequest.get(url, options)
-    } catch (e) {
-      lastError = e
-    }
-  }
-  throw lastError
-}
-
 export async function checkUpdate(): Promise<IAppVersion | undefined> {
-  const [{ 'mixed-port': mixedPort = 7890 }, { githubProxy = '' }] = await Promise.all([
-    getControledMihomoConfig(),
-    getAppConfig()
-  ])
+  const { 'mixed-port': mixedPort = 7890 } = await getControledMihomoConfig()
   const githubUrl =
-    'https://github.com/mihomo-party-org/mihomo-party/releases/latest/download/latest.yml'
-  const res = await tryDownload(buildDownloadUrls(githubUrl, githubProxy), {
+    'https://github.com/Yonch404/clash-lite/releases/latest/download/latest.yml'
+  const res = await chromeRequest.get(githubUrl, {
     headers: { 'Content-Type': 'application/octet-stream' },
     proxy: { protocol: 'http', host: '127.0.0.1', port: mixedPort },
     responseType: 'text'
@@ -79,17 +52,14 @@ function compareVersions(a: string, b: string): number {
 }
 
 export async function downloadAndInstallUpdate(version: string): Promise<void> {
-  const [{ 'mixed-port': mixedPort = 7890 }, { githubProxy = '' }] = await Promise.all([
-    getControledMihomoConfig(),
-    getAppConfig()
-  ])
-  const githubBase = `https://github.com/mihomo-party-org/mihomo-party/releases/download/v${version}/`
+  const { 'mixed-port': mixedPort = 7890 } = await getControledMihomoConfig()
+  const githubBase = `https://github.com/Yonch404/clash-lite/releases/download/v${version}/`
   const fileMap = {
-    'win32-x64': `clash-party-windows-${version}-x64-setup.exe`,
-    'win32-ia32': `clash-party-windows-${version}-ia32-setup.exe`,
-    'win32-arm64': `clash-party-windows-${version}-arm64-setup.exe`,
-    'darwin-x64': `clash-party-macos-${version}-x64.pkg`,
-    'darwin-arm64': `clash-party-macos-${version}-arm64.pkg`
+    'win32-x64': `clash-lite-windows-${version}-x64-setup.exe`,
+    'win32-ia32': `clash-lite-windows-${version}-ia32-setup.exe`,
+    'win32-arm64': `clash-lite-windows-${version}-arm64-setup.exe`,
+    'darwin-x64': `clash-lite-macos-${version}-x64.pkg`,
+    'darwin-arm64': `clash-lite-macos-${version}-arm64.pkg`
   }
   let file = fileMap[`${process.platform}-${process.arch}`]
   if (isPortable()) {
@@ -112,12 +82,12 @@ export async function downloadAndInstallUpdate(version: string): Promise<void> {
   const proxy = { protocol: 'http' as const, host: '127.0.0.1', port: mixedPort }
   try {
     if (!existsSync(path.join(dataDir(), file))) {
-      const sha256Res = await tryDownload(
-        buildDownloadUrls(`${githubBase}${file}.sha256`, githubProxy),
-        { proxy, responseType: 'text' }
-      )
+      const sha256Res = await chromeRequest.get(`${githubBase}${file}.sha256`, {
+        proxy,
+        responseType: 'text'
+      })
       const expectedHash = (sha256Res.data as string).trim().split(/\s+/)[0]
-      const res = await tryDownload(buildDownloadUrls(`${githubBase}${file}`, githubProxy), {
+      const res = await chromeRequest.get(`${githubBase}${file}`, {
         responseType: 'arraybuffer',
         timeout: 0,
         proxy,

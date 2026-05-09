@@ -1,5 +1,5 @@
-appId: party.mihomo.app
-productName: Clash Party
+appId: lite.clash.app
+productName: Clash Lite
 directories:
   buildResources: build
 files:
@@ -19,23 +19,25 @@ extraResources:
   - from: './extra/'
     to: ''
 protocols:
-  name: 'Clash Party URI Scheme'
+  name: 'Clash Lite URI Scheme'
   schemes:
     - 'clash'
     - 'mihomo'
 win:
+  icon: build/app-icon.ico
   target:
     - nsis
     - 7z
-  artifactName: clash-party-windows-${version}-${arch}-portable.${ext}
+  artifactName: clash-lite-windows-${version}-${arch}-portable.${ext}
 nsis:
-  artifactName: clash-party-windows-${version}-${arch}-setup.${ext}
+  artifactName: clash-lite-windows-${version}-${arch}-setup.${ext}
   uninstallDisplayName: ${productName}
   allowToChangeInstallationDirectory: true
   oneClick: false
   perMachine: true
   createDesktopShortcut: always
 mac:
+  icon: build/app-icon.png
   target:
     - pkg
   entitlementsInherit: build/entitlements.mac.plist
@@ -47,7 +49,7 @@ mac:
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
   notarize: false
-  artifactName: clash-party-macos-${version}-${arch}.${ext}
+  artifactName: clash-lite-macos-${version}-${arch}.${ext}
 pkg:
   allowAnywhere: false
   allowCurrentUserHome: false
@@ -56,23 +58,23 @@ pkg:
     alignment: bottomleft
     file: build/background.png
 linux:
-  executableName: mihomo-party
-  icon: build/icon.png
+  executableName: clash-lite
+  icon: build/app-icon.png
   desktop:
     entry:
-      Name: Clash Party
+      Name: Clash Lite
       GenericName: Proxy Client
       Comment: A GUI client based on Mihomo
       MimeType: 'x-scheme-handler/clash;x-scheme-handler/mihomo'
       Keywords: proxy;clash;mihomo;vpn;
-      StartupWMClass: mihomo-party
-      Icon: mihomo-party
+      StartupWMClass: clash-lite
+      Icon: clash-lite
   target:
     - deb
     - rpm
-  maintainer: mihomo-party-org
+  maintainer: clash-lite
   category: Utility
-  artifactName: clash-party-linux-${version}-${arch}.${ext}
+  artifactName: clash-lite-linux-${version}-${arch}.${ext}
 deb:
   afterInstall: 'build/linux/postinst'
   afterRemove: 'build/linux/postuninst'

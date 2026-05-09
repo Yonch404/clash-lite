@@ -1,14 +1,10 @@
-import { mkdir, writeFile, rm, readdir, cp, stat, rename } from 'fs/promises'
+import { mkdir, writeFile, rm, readdir, cp, stat } from 'fs/promises'
 import { existsSync } from 'fs'
 import { exec, execFile } from 'child_process'
 import { promisify } from 'util'
 import path from 'path'
 import { app, dialog } from 'electron'
-import {
-  startPacServer,
-  startSubStoreBackendServer,
-  startSubStoreFrontendServer
-} from '../resolve/server'
+import { startPacServer } from '../resolve/server'
 import { triggerSysProxy } from '../sys/sysproxy'
 import {
   getAppConfig,
@@ -16,13 +12,11 @@ import {
   patchAppConfig,
   patchControledMihomoConfig
 } from '../config'
-import { startSSIDCheck } from '../sys/ssid'
 import i18next, { resources } from '../../shared/i18n'
 import { stringify } from './yaml'
 import {
   defaultConfig,
   defaultControledMihomoConfig,
-  defaultOverrideConfig,
   defaultProfile,
   defaultProfileConfig
 } from './template'
@@ -33,14 +27,10 @@ import {
   logDir,
   mihomoTestDir,
   mihomoWorkDir,
-  overrideConfigPath,
-  overrideDir,
   profileConfigPath,
   profilePath,
   profilesDir,
   resourcesFilesDir,
-  rulesDir,
-  subStoreDir,
   themesDir
 } from './dirs'
 import { initLogger } from './logger'
@@ -102,12 +92,9 @@ async function initDirs(): Promise<void> {
     dataDir(),
     themesDir(),
     profilesDir(),
-    overrideDir(),
-    rulesDir(),
     mihomoWorkDir(),
     logDir(),
-    mihomoTestDir(),
-    subStoreDir()
+    mihomoTestDir()
   ]
 
   await Promise.all(
@@ -123,7 +110,6 @@ async function initConfig(): Promise<void> {
   const configs = [
     { path: appConfigPath(), content: defaultConfig, name: 'app config' },
     { path: profileConfigPath(), content: defaultProfileConfig, name: 'profile config' },
-    { path: overrideConfigPath(), content: defaultOverrideConfig, name: 'override config' },
     { path: profilePath('default'), content: defaultProfile, name: 'default profile' },
     {
       path: controledMihomoConfigPath(),
@@ -146,7 +132,7 @@ async function killOldMihomoProcesses(): Promise<void> {
 
   try {
     const execFilePromise = promisify(execFile)
-    const coreNames = new Set(['mihomo.exe', 'mihomo-alpha.exe', 'mihomo-smart.exe'])
+    const coreNames = new Set(['mihomo.exe'])
     const { stdout } = await execFilePromise('tasklist', ['/FO', 'CSV', '/NH'])
 
     const pids = stdout
@@ -229,14 +215,6 @@ async function initFiles(): Promise<void> {
     {
       name: 'ASN.mmdb',
       targetDirs: [mihomoWorkDir(), mihomoTestDir()]
-    },
-    {
-      name: 'sub-store.bundle.cjs',
-      targetDirs: [mihomoWorkDir()]
-    },
-    {
-      name: 'sub-store-frontend',
-      targetDirs: [mihomoWorkDir()]
     }
   ]
 
@@ -284,33 +262,19 @@ async function cleanup(): Promise<void> {
   await Promise.all([...cacheCleanup, ...logCleanup])
 }
 
-async function migrateSubStoreFiles(): Promise<void> {
-  const oldJsPath = path.join(mihomoWorkDir(), 'sub-store.bundle.js')
-  const newCjsPath = path.join(mihomoWorkDir(), 'sub-store.bundle.cjs')
-
-  if (existsSync(oldJsPath) && !existsSync(newCjsPath)) {
-    try {
-      await rename(oldJsPath, newCjsPath)
-    } catch (error) {
-      await initLogger.error('Failed to rename sub-store.bundle.js to sub-store.bundle.cjs', error)
-    }
-  }
-}
-
-// 迁移：添加 substore 到侧边栏
-async function migrateSiderOrder(): Promise<void> {
-  const { siderOrder = [], useSubStore = true } = await getAppConfig()
-  if (useSubStore && !siderOrder.includes('substore')) {
-    await patchAppConfig({ siderOrder: [...siderOrder, 'substore'] })
-  }
-}
-
 // 迁移：修复 appTheme
 async function migrateAppTheme(): Promise<void> {
   const { appTheme = 'system' } = await getAppConfig()
   if (!['system', 'light', 'dark'].includes(appTheme)) {
     await patchAppConfig({ appTheme: 'system' })
   }
+}
+
+async function migrateDisabledFeatures(): Promise<void> {
+  await patchAppConfig({
+    core: 'mihomo',
+    customTheme: 'default.css'
+  })
 }
 
 // 迁移：envType 字符串转数组
@@ -363,12 +327,9 @@ async function migrateMihomoConfig(): Promise<void> {
   if (!config['lan-allowed-ips']) patches['lan-allowed-ips'] = ['0.0.0.0/0', '::/0']
   if (!config['lan-disallowed-ips']) patches['lan-disallowed-ips'] = []
 
-  // tun device
-  if (!config.tun?.device || (process.platform === 'darwin' && config.tun.device === 'Mihomo')) {
-    patches.tun = {
-      ...config.tun,
-      device: process.platform === 'darwin' ? 'utun1500' : 'Mihomo'
-    }
+  // TUN defaults to enabled for new configs, then keeps the user's switch state.
+  if (config.tun?.enable === undefined) {
+    patches.tun = { enable: true } as IMihomoTunConfig
   }
 
   // 移除废弃配置
@@ -383,12 +344,12 @@ async function migrateMihomoConfig(): Promise<void> {
 
 async function migration(): Promise<void> {
   await Promise.all([
-    migrateSiderOrder(),
     migrateAppTheme(),
     migrateEnvType(),
     migrateTraySettings(),
     migrateRemovePassword(),
-    migrateMihomoConfig()
+    migrateMihomoConfig(),
+    migrateDisabledFeatures()
   ])
 }
 
@@ -412,7 +373,6 @@ export async function initBasic(): Promise<void> {
     await initDirs()
     await initConfig()
     await migration()
-    await migrateSubStoreFiles()
 
     isInitBasicCompleted = true
   })()
@@ -448,9 +408,7 @@ export async function init(): Promise<void> {
   const initTasks: Promise<void>[] = [
     (async (): Promise<void> => {
       await ensureRuntimeFiles()
-      await Promise.all([startSubStoreFrontendServer(), startSubStoreBackendServer()])
-    })(),
-    startSSIDCheck()
+    })()
   ]
 
   initTasks.push(

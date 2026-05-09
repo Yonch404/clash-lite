@@ -78,15 +78,6 @@ export function createTourDriver(t: TFunction, navigate: NavigateFunction): void
         }
       },
       {
-        element: '.substore-import',
-        popover: {
-          title: t('guide.substore.title'),
-          description: t('guide.substore.description'),
-          side: 'bottom',
-          align: 'start'
-        }
-      },
-      {
         element: '.new-profile',
         popover: {
           title: t('guide.localProfile.title'),
@@ -141,30 +132,6 @@ export function createTourDriver(t: TFunction, navigate: NavigateFunction): void
           description: t('guide.tunSetting.description'),
           side: 'bottom',
           align: 'start'
-        }
-      },
-      {
-        element: '.override-card',
-        popover: {
-          title: t('guide.override.title'),
-          description: t('guide.override.description'),
-          side: 'right',
-          align: 'center'
-        }
-      },
-      {
-        element: '.dns-card',
-        popover: {
-          title: t('guide.dns.title'),
-          description: t('guide.dns.description'),
-          side: 'right',
-          align: 'center',
-          onNextClick: async (): Promise<void> => {
-            navigate('/profiles')
-            setTimeout(() => {
-              driverInstance?.moveNext()
-            }, 0)
-          }
         }
       },
       {

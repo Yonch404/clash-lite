@@ -151,6 +151,42 @@
   overflow: hidden;
 }
 
+.sider-card-interactive,
+.profile-card-interactive {
+  --sider-card-hover-bg: hsl(var(--heroui-primary) / 0.24);
+  --sider-card-selected-bg: hsl(var(--heroui-primary));
+  transition: background-color 90ms ease;
+}
+
+.dark .sider-card-interactive,
+.dark .profile-card-interactive {
+  --sider-card-hover-bg: hsl(var(--heroui-primary) / 0.3);
+}
+
+.sider-card-interactive:is(:hover, [data-hover='true']):not(
+    .sider-card-selected,
+    .sider-card-committed
+  ),
+.profile-card-interactive:hover:not(
+    .profile-card-selected,
+    .profile-card-committed,
+    .profile-card-dragging
+  ) {
+  background-color: var(--sider-card-hover-bg);
+}
+
+.sider-card-interactive.sider-card-selected,
+.sider-card-interactive.sider-card-committed,
+.profile-card-interactive.profile-card-selected,
+.profile-card-interactive.profile-card-committed {
+  background-color: var(--sider-card-selected-bg);
+}
+
+.sider-card-no-animation,
+.profile-card-no-animation {
+  transition: none;
+}
+
 /* Toast */
 .toast-enter {
   animation: toast-in 0.2s ease-out forwards;

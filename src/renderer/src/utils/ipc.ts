@@ -18,25 +18,15 @@ interface IpcApi {
   mihomoVersion: () => Promise<IMihomoVersion>
   mihomoCloseConnection: (id: string) => Promise<void>
   mihomoCloseAllConnections: () => Promise<void>
-  mihomoRules: () => Promise<IMihomoRulesInfo>
-  mihomoRulesDisable: (rules: Record<string, boolean>) => Promise<void>
   mihomoProxies: () => Promise<IMihomoProxies>
   mihomoGroups: () => Promise<IMihomoMixedGroup[]>
   mihomoProxyProviders: () => Promise<IMihomoProxyProviders>
-  mihomoUpdateProxyProviders: (name: string) => Promise<void>
-  mihomoRuleProviders: () => Promise<IMihomoRuleProviders>
-  mihomoUpdateRuleProviders: (name: string) => Promise<void>
   mihomoChangeProxy: (group: string, proxy: string) => Promise<IMihomoProxy>
   mihomoUnfixedProxy: (group: string) => Promise<IMihomoProxy>
-  mihomoUpgradeGeo: () => Promise<void>
   mihomoUpgrade: () => Promise<void>
-  mihomoUpgradeUI: () => Promise<void>
   mihomoProxyDelay: (proxy: string, url?: string) => Promise<IMihomoDelay>
   mihomoGroupDelay: (group: string, url?: string) => Promise<IMihomoGroupDelay>
   patchMihomoConfig: (patch: Partial<IMihomoConfig>) => Promise<void>
-  mihomoSmartGroupWeights: (groupName: string) => Promise<Record<string, number>>
-  mihomoSmartFlushCache: (configName?: string) => Promise<void>
-  getSmartOverrideContent: () => Promise<string | null>
   // AutoRun
   checkAutoRun: () => Promise<boolean>
   enableAutoRun: () => Promise<void>
@@ -60,27 +50,13 @@ interface IpcApi {
   changeCurrentProfile: (id: string) => Promise<void>
   addProfileUpdater: (item: IProfileItem) => Promise<void>
   removeProfileUpdater: (id: string) => Promise<void>
-  // Override
-  getOverrideConfig: (force?: boolean) => Promise<IOverrideConfig>
-  setOverrideConfig: (config: IOverrideConfig) => Promise<void>
-  getOverrideItem: (id: string) => Promise<IOverrideItem | undefined>
-  addOverrideItem: (item: Partial<IOverrideItem>) => Promise<void>
-  removeOverrideItem: (id: string) => Promise<void>
-  updateOverrideItem: (item: IOverrideItem) => Promise<void>
-  getOverride: (id: string, ext: 'js' | 'yaml' | 'log') => Promise<string>
-  setOverride: (id: string, ext: 'js' | 'yaml', str: string) => Promise<void>
   // File
-  getFileStr: (path: string) => Promise<string>
-  setFileStr: (path: string, str: string) => Promise<void>
-  convertMrsRuleset: (path: string, behavior: string) => Promise<string>
   getRuntimeConfig: () => Promise<IMihomoConfig>
   getRuntimeConfigStr: () => Promise<string>
-  getRuleStr: (id: string) => Promise<string>
-  setRuleStr: (id: string, str: string) => Promise<void>
   getFilePath: (ext: string[], title?: string, filterName?: string) => Promise<string[] | undefined>
   readTextFile: (filePath: string) => Promise<string>
   readImageFileDataURL: (filePath: string) => Promise<string>
-  openFile: (type: 'profile' | 'override', id: string, ext?: 'yaml' | 'js') => Promise<void>
+  openFile: (type: 'profile', id: string) => Promise<void>
   // Core
   restartCore: () => Promise<void>
   mihomoHotReloadConfig: () => Promise<void>
@@ -88,15 +64,9 @@ interface IpcApi {
   quitWithoutCore: () => Promise<void>
   // System
   triggerSysProxy: (enable: boolean) => Promise<void>
-  checkTunPermissions: () => Promise<boolean>
-  grantTunPermissions: () => Promise<void>
-  manualGrantCorePermition: () => Promise<void>
   checkAdminPrivileges: () => Promise<boolean>
   restartAsAdmin: () => Promise<void>
-  checkMihomoCorePermissions: () => Promise<boolean>
   checkHighPrivilegeCore: () => Promise<boolean>
-  showTunPermissionDialog: () => Promise<boolean>
-  showErrorDialog: (title: string, message: string) => Promise<void>
   openUWPTool: () => Promise<void>
   setupFirewall: () => Promise<void>
   getInterfaces: () => Promise<Record<string, NetworkInterfaceInfo[]>>
@@ -107,35 +77,10 @@ interface IpcApi {
   downloadAndInstallUpdate: (version: string) => Promise<void>
   getVersion: () => Promise<string>
   platform: () => Promise<NodeJS.Platform>
-  fetchMihomoTags: (
-    forceRefresh?: boolean
-  ) => Promise<{ name: string; zipball_url: string; tarball_url: string }[]>
-  installSpecificMihomoCore: (version: string) => Promise<void>
-  clearMihomoVersionCache: () => Promise<void>
   // Backup
-  webdavBackup: () => Promise<boolean>
-  webdavRestore: (filename: string) => Promise<void>
-  listWebdavBackups: () => Promise<string[]>
-  webdavDelete: (filename: string) => Promise<void>
-  reinitWebdavBackupScheduler: () => Promise<void>
   exportLocalBackup: () => Promise<boolean>
   importLocalBackup: () => Promise<boolean>
-  // SubStore
-  startSubStoreFrontendServer: () => Promise<void>
-  stopSubStoreFrontendServer: () => Promise<void>
-  startSubStoreBackendServer: () => Promise<void>
-  stopSubStoreBackendServer: () => Promise<void>
-  downloadSubStore: () => Promise<void>
-  subStorePort: () => Promise<number>
-  subStoreFrontendPort: () => Promise<number>
-  subStoreSubs: () => Promise<ISubStoreSub[]>
-  subStoreCollections: () => Promise<ISubStoreSub[]>
   // Theme
-  resolveThemes: () => Promise<{ key: string; label: string; content: string }[]>
-  fetchThemes: () => Promise<void>
-  importThemes: (files: string[]) => Promise<void>
-  readTheme: (theme: string) => Promise<string>
-  writeTheme: (theme: string, css: string) => Promise<void>
   // Tray
   showTrayIcon: () => Promise<void>
   closeTrayIcon: () => Promise<void>
@@ -151,10 +96,7 @@ interface IpcApi {
   isAlwaysOnTop: () => Promise<boolean>
   openDevTools: () => Promise<void>
   createHeapSnapshot: () => Promise<void>
-  // Shortcut
-  registerShortcut: (oldShortcut: string, newShortcut: string, action: string) => Promise<boolean>
   // Misc
-  getGistUrl: () => Promise<string>
   fetchIPInfo: (url: string) => Promise<unknown>
   measureLatency: (url: string) => Promise<number | null>
   getImageDataURL: (url: string) => Promise<string>
@@ -176,25 +118,15 @@ export const {
   mihomoVersion,
   mihomoCloseConnection,
   mihomoCloseAllConnections,
-  mihomoRules,
-  mihomoRulesDisable,
   mihomoProxies,
   mihomoGroups,
   mihomoProxyProviders,
-  mihomoUpdateProxyProviders,
-  mihomoRuleProviders,
-  mihomoUpdateRuleProviders,
   mihomoChangeProxy,
   mihomoUnfixedProxy,
-  mihomoUpgradeGeo,
   mihomoUpgrade,
-  mihomoUpgradeUI,
   mihomoProxyDelay,
   mihomoGroupDelay,
   patchMihomoConfig,
-  mihomoSmartGroupWeights,
-  mihomoSmartFlushCache,
-  getSmartOverrideContent,
   // AutoRun
   checkAutoRun,
   enableAutoRun,
@@ -218,23 +150,9 @@ export const {
   changeCurrentProfile,
   addProfileUpdater,
   removeProfileUpdater,
-  // Override
-  getOverrideConfig,
-  setOverrideConfig,
-  getOverrideItem,
-  addOverrideItem,
-  removeOverrideItem,
-  updateOverrideItem,
-  getOverride,
-  setOverride,
   // File
-  getFileStr,
-  setFileStr,
-  convertMrsRuleset,
   getRuntimeConfig,
   getRuntimeConfigStr,
-  getRuleStr,
-  setRuleStr,
   getFilePath,
   readTextFile,
   readImageFileDataURL,
@@ -246,15 +164,9 @@ export const {
   quitWithoutCore,
   // System
   triggerSysProxy,
-  checkTunPermissions,
-  grantTunPermissions,
-  manualGrantCorePermition,
   checkAdminPrivileges,
   restartAsAdmin,
-  checkMihomoCorePermissions,
   checkHighPrivilegeCore,
-  showTunPermissionDialog,
-  showErrorDialog,
   openUWPTool,
   setupFirewall,
   getInterfaces,
@@ -264,33 +176,10 @@ export const {
   checkUpdate,
   downloadAndInstallUpdate,
   getVersion,
-  fetchMihomoTags,
-  installSpecificMihomoCore,
-  clearMihomoVersionCache,
   // Backup
-  webdavBackup,
-  webdavRestore,
-  listWebdavBackups,
-  webdavDelete,
-  reinitWebdavBackupScheduler,
   exportLocalBackup,
   importLocalBackup,
-  // SubStore
-  startSubStoreFrontendServer,
-  stopSubStoreFrontendServer,
-  startSubStoreBackendServer,
-  stopSubStoreBackendServer,
-  downloadSubStore,
-  subStorePort,
-  subStoreFrontendPort,
-  subStoreSubs,
-  subStoreCollections,
   // Theme
-  resolveThemes,
-  fetchThemes,
-  importThemes,
-  readTheme,
-  writeTheme,
   // Tray
   showTrayIcon,
   closeTrayIcon,
@@ -306,10 +195,7 @@ export const {
   isAlwaysOnTop,
   openDevTools,
   createHeapSnapshot,
-  // Shortcut
-  registerShortcut,
   // Misc
-  getGistUrl,
   fetchIPInfo,
   measureLatency,
   getImageDataURL,
@@ -351,11 +237,6 @@ export async function setTitleBarOverlay(overlay: TitleBarOverlayOptions): Promi
   } catch {
     // Not supported on this platform
   }
-}
-
-// updateTrayIconImmediate: 同步调用，不等待结果
-export function updateTrayIconImmediate(sysProxyEnabled: boolean, tunEnabled: boolean): void {
-  window.electron.ipcRenderer.invoke('updateTrayIconImmediate', sysProxyEnabled, tunEnabled)
 }
 
 // getAppName: 获取应用程序名称
