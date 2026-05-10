@@ -1,6 +1,7 @@
-import { exec } from 'child_process'
+import { exec, execFile } from 'child_process'
 import { promisify } from 'util'
 import { existsSync } from 'fs'
+import { stat } from 'fs/promises'
 import path from 'path'
 import { app, dialog } from 'electron'
 import { mihomoCorePath, mihomoCoreDir } from '../utils/dirs'
@@ -9,6 +10,7 @@ import i18next from '../../shared/i18n'
 import { checkAdminPrivileges } from './admin'
 
 const execPromise = promisify(exec)
+const execFilePromise = promisify(execFile)
 
 // 内核名称白名单
 const ALLOWED_CORES = ['mihomo'] as const
@@ -60,6 +62,38 @@ export function getSessionAdminStatus(): boolean {
 }
 
 export { checkAdminPrivileges } from './admin'
+
+export async function checkTunCorePrivilege(): Promise<boolean> {
+  if (process.platform !== 'linux') {
+    return true
+  }
+
+  if (process.geteuid?.() === 0) {
+    return true
+  }
+
+  const corePath = mihomoCorePath('mihomo')
+  if (!existsSync(corePath)) {
+    return false
+  }
+
+  try {
+    const stats = await stat(corePath)
+    const isSetuidRoot = stats.uid === 0 && (stats.mode & 0o4000) !== 0
+    if (isSetuidRoot) {
+      return true
+    }
+  } catch (error) {
+    managerLogger.warn('Failed to inspect mihomo core permissions', error)
+  }
+
+  try {
+    const { stdout } = await execFilePromise('getcap', [corePath], { encoding: 'utf8' })
+    return stdout.includes('cap_net_admin')
+  } catch {
+    return false
+  }
+}
 
 export async function checkHighPrivilegeCore(): Promise<boolean> {
   try {

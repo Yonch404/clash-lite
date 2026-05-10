@@ -14,7 +14,10 @@ fi
 
 chmod 4755 '/opt/Clash Lite/chrome-sandbox' 2>/dev/null || true
 
-chmod +sx '/opt/Clash Lite/resources/sidecar/mihomo' 2>/dev/null || true
+if [ -f '/opt/Clash Lite/resources/sidecar/mihomo' ]; then
+    chown root:root '/opt/Clash Lite/resources/sidecar/mihomo' 2>/dev/null || true
+    chmod 4755 '/opt/Clash Lite/resources/sidecar/mihomo' 2>/dev/null || true
+fi
 
 if hash update-mime-database 2>/dev/null; then
     update-mime-database /usr/share/mime || true

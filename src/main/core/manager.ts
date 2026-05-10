@@ -36,7 +36,11 @@ import {
   getAxios
 } from './mihomoApi'
 import { generateProfile } from './factory'
-import { getSessionAdminStatus, setStopCoreBeforeAdminRestart } from './permissions'
+import {
+  checkTunCorePrivilege,
+  getSessionAdminStatus,
+  setStopCoreBeforeAdminRestart
+} from './permissions'
 import {
   cleanupSocketFile,
   cleanupWindowsNamedPipes,
@@ -50,6 +54,7 @@ export {
   getSessionAdminStatus,
   checkAdminPrivileges,
   checkHighPrivilegeCore,
+  checkTunCorePrivilege,
   restartAsAdmin,
   showErrorDialog
 } from './permissions'
@@ -145,6 +150,12 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
   if (process.platform === 'win32' && (tun?.enable ?? true) && !getSessionAdminStatus()) {
     throw new Error(i18next.t('tun.error.tunPermissionDenied'))
   }
+  if (process.platform === 'linux' && (tun?.enable ?? true)) {
+    const hasTunPrivilege = await checkTunCorePrivilege()
+    if (!hasTunPrivilege) {
+      throw new Error(i18next.t('tun.error.linuxTunPermissionDenied'))
+    }
+  }
 
   // 清理旧进程
   const pidPath = path.join(dataDir(), 'core.pid')
@@ -220,35 +231,32 @@ function setupCoreListeners(
   resolve: (value: Promise<void>[]) => void,
   reject: (reason: unknown) => void
 ): void {
-  proc.on('close', async (code, signal) => {
-    managerLogger.info(`Core closed, code: ${code}, signal: ${signal}`)
+  let startupSettled = false
+  let skipAutoRestart = false
 
-    if (child === proc) {
-      child = null
+  const resolveStartup = (value: Promise<void>[]): void => {
+    if (startupSettled) return
+    startupSettled = true
+    resolve(value)
+  }
+
+  const rejectStartup = (reason: unknown, preventAutoRestart = false): void => {
+    if (preventAutoRestart) {
+      skipAutoRestart = true
     }
+    if (startupSettled) return
+    startupSettled = true
+    reject(reason)
+  }
 
-    if (isRestarting) {
-      managerLogger.info('Core closed during restart, skipping auto-restart')
-      return
-    }
-
-    if (retry) {
-      managerLogger.info('Try Restart Core')
-      retry--
-      await restartCore()
-    } else {
-      await stopCore()
-    }
-  })
-
-  proc.stdout?.on('data', async (data) => {
+  const handleCoreOutput = async (data: Buffer): Promise<void> => {
     const str = data.toString()
 
     // TUN 权限错误
     if (str.includes('configure tun interface: operation not permitted')) {
       mainWindow?.webContents.send('controledMihomoConfigUpdated')
       ipcMain.emit('updateTrayMenu')
-      reject(i18next.t('tun.error.tunPermissionDenied'))
+      rejectStartup(i18next.t('tun.error.tunPermissionDenied'), true)
       return
     }
 
@@ -270,7 +278,7 @@ function setupCoreListeners(
         }
       }
 
-      reject(i18next.t('mihomo.error.externalControllerListenError'))
+      rejectStartup(i18next.t('mihomo.error.externalControllerListenError'), true)
       return
     }
 
@@ -280,7 +288,7 @@ function setupCoreListeners(
       (process.platform === 'win32' && str.includes('RESTful API pipe listening at'))
 
     if (isApiReady) {
-      resolve([
+      resolveStartup([
         new Promise((innerResolve) => {
           proc.stdout?.on('data', async (innerData) => {
             if (
@@ -305,7 +313,43 @@ function setupCoreListeners(
       await startMihomoMemory()
       retry = 10
     }
+  }
+
+  proc.on('close', async (code, signal) => {
+    managerLogger.info(`Core closed, code: ${code}, signal: ${signal}`)
+
+    if (child === proc) {
+      child = null
+    }
+
+    if (skipAutoRestart) {
+      return
+    }
+
+    if (isRestarting) {
+      managerLogger.info('Core closed during restart, skipping auto-restart')
+      return
+    }
+
+    if (!startupSettled) {
+      rejectStartup(
+        `${i18next.t('mihomo.error.coreStartFailed')}: ${code ?? signal ?? 'unknown'}`,
+        true
+      )
+      return
+    }
+
+    if (retry) {
+      managerLogger.info('Try Restart Core')
+      retry--
+      await restartCore()
+    } else {
+      await stopCore()
+    }
   })
+
+  proc.stdout?.on('data', handleCoreOutput)
+  proc.stderr?.on('data', handleCoreOutput)
 }
 
 // 启动核心
