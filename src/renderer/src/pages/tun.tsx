@@ -11,11 +11,12 @@ import { useTranslation } from 'react-i18next'
 const Tun: React.FC = () => {
   const { t } = useTranslation()
   const [loading, setLoading] = useState(false)
+  const canResetFirewall = platform === 'win32' || platform === 'linux'
 
   return (
     <BasePage title={t('tun.title')}>
       <SettingCard className="tun-settings">
-        {platform === 'win32' && (
+        {canResetFirewall && (
           <SettingItem title={t('tun.firewall.title')}>
             <Button
               size="sm"

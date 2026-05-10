@@ -690,7 +690,7 @@
   "guide.tun.title": "Virtual Network Card",
   "guide.tun.description": "Virtual network card, commonly known as 'Tun Mode' in similar software, allows you to let the core take control of all traffic for applications that don't follow system proxy settings.",
   "guide.tunSetting.title": "Virtual Network Card Settings",
-  "guide.tunSetting.description": "The virtual network card is enabled by default. This page only keeps Reset Firewall on Windows. If it does not work, reset the firewall and restart the core.",
+  "guide.tunSetting.description": "The virtual network card is enabled by default. This page only keeps Reset Firewall on Windows/Linux. If it does not work, reset the firewall and restart the core.",
   "guide.override.title": "Override",
   "guide.override.description": "Clash Lite has removed override support. Runtime configuration keeps the original subscription as unchanged as possible.",
   "guide.dns.title": "DNS OVRD",

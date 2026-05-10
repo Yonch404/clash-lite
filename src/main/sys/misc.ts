@@ -61,6 +61,7 @@ export async function openUWPTool(): Promise<void> {
 
 export async function setupFirewall(): Promise<void> {
   const execPromise = promisify(exec)
+  const execFilePromise = promisify(execFile)
 
   if (process.platform === 'win32') {
     const rules = [
@@ -75,6 +76,43 @@ export async function setupFirewall(): Promise<void> {
         `netsh advfirewall firewall add rule name="${rule.name}" dir=in action=allow program="${rule.program}" enable=yes profile=any`,
         { shell: 'cmd' }
       )
+    }
+    return
+  }
+
+  if (process.platform === 'linux') {
+    const linuxFirewallResetScript = `
+if command -v nft >/dev/null 2>&1; then
+  for family in inet ip ip6; do
+    for table in mihomo clash; do
+      nft delete table "$family" "$table" 2>/dev/null || true
+    done
+  done
+fi
+
+reset_iptables() {
+  cmd="$1"
+  command -v "$cmd" >/dev/null 2>&1 || return 0
+  for table in nat mangle; do
+    for chain in MIHOMO Mihomo mihomo CLASH Clash clash; do
+      for base in PREROUTING OUTPUT INPUT FORWARD POSTROUTING; do
+        while "$cmd" -t "$table" -D "$base" -j "$chain" 2>/dev/null; do :; done
+      done
+      "$cmd" -t "$table" -F "$chain" 2>/dev/null || true
+      "$cmd" -t "$table" -X "$chain" 2>/dev/null || true
+    done
+  done
+}
+
+reset_iptables iptables
+reset_iptables ip6tables
+exit 0
+`.trim()
+
+    if (process.geteuid?.() === 0) {
+      await execFilePromise('sh', ['-c', linuxFirewallResetScript])
+    } else {
+      await execFilePromise('pkexec', ['sh', '-c', linuxFirewallResetScript])
     }
   }
 }

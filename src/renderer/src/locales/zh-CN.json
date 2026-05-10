@@ -690,7 +690,7 @@
   "guide.tun.title": "虚拟网卡",
   "guide.tun.description": "虚拟网卡，即同类软件中常见的\"Tun 模式\"，对于某些不遵循系统代理的应用，您可以打开虚拟网卡以让内核接管所有流量",
   "guide.tunSetting.title": "虚拟网卡设置",
-  "guide.tunSetting.description": "虚拟网卡已默认开启，本页面仅保留 Windows 下的\"重设防火墙\"。如果虚拟网卡不可用，可以重设防火墙后重启内核。",
+  "guide.tunSetting.description": "虚拟网卡已默认开启，本页面仅保留 Windows/Linux 下的\"重设防火墙\"。如果虚拟网卡不可用，可以重设防火墙后重启内核。",
   "guide.override.title": "覆写",
   "guide.override.description": "Clash Lite 已移除覆写功能，运行配置会尽量保持原订阅配置不被额外改写。",
   "guide.dns.title": "DNS",
