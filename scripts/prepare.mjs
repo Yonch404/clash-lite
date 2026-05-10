@@ -20,12 +20,12 @@ const MIHOMO_URL_PREFIX = `https://github.com/MetaCubeX/mihomo/releases/download
 let MIHOMO_VERSION
 
 const MIHOMO_MAP = {
-  'win32-x64': 'mihomo-windows-amd64-compatible',
+  'win32-x64': 'mihomo-windows-amd64',
   'win32-ia32': 'mihomo-windows-386',
   'win32-arm64': 'mihomo-windows-arm64',
-  'darwin-x64': 'mihomo-darwin-amd64-compatible',
+  'darwin-x64': 'mihomo-darwin-amd64',
   'darwin-arm64': 'mihomo-darwin-arm64',
-  'linux-x64': 'mihomo-linux-amd64-compatible',
+  'linux-x64': 'mihomo-linux-amd64',
   'linux-arm64': 'mihomo-linux-arm64'
 }
 
