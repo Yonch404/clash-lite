@@ -21,7 +21,6 @@ let MIHOMO_VERSION
 
 const MIHOMO_MAP = {
   'win32-x64': 'mihomo-windows-amd64',
-  'win32-ia32': 'mihomo-windows-386',
   'win32-arm64': 'mihomo-windows-arm64',
   'darwin-x64': 'mihomo-darwin-amd64',
   'darwin-arm64': 'mihomo-darwin-arm64',
@@ -230,15 +229,10 @@ function getSysproxyNodeName() {
     }
   })()
 
-  const isWin7Build = process.env.LEGACY_BUILD === 'true'
-
   switch (platform) {
     case 'win32':
-      if (arch === 'x64')
-        return isWin7Build ? 'sysproxy.win32-x64-msvc-win7.node' : 'sysproxy.win32-x64-msvc.node'
+      if (arch === 'x64') return 'sysproxy.win32-x64-msvc.node'
       if (arch === 'arm64') return 'sysproxy.win32-arm64-msvc.node'
-      if (arch === 'ia32')
-        return isWin7Build ? 'sysproxy.win32-ia32-msvc-win7.node' : 'sysproxy.win32-ia32-msvc.node'
       break
     case 'darwin':
       if (arch === 'x64') return 'sysproxy.darwin-x64.node'

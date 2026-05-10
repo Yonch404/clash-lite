@@ -77,18 +77,12 @@ export function getDownloadUrl(isDev, version) {
 }
 
 export function generateDownloadLinksMarkdown(downloadUrl, version) {
-  let links = '\n### 下载地址：\n\n#### Windows10/11：\n\n'
-  links += `- 安装版：[64位](${downloadUrl}/clash-lite-windows-${version}-x64-setup.exe) | [32位](${downloadUrl}/clash-lite-windows-${version}-ia32-setup.exe) | [ARM64](${downloadUrl}/clash-lite-windows-${version}-arm64-setup.exe)\n\n`
-  links += `- 便携版：[64位](${downloadUrl}/clash-lite-windows-${version}-x64-portable.7z) | [32位](${downloadUrl}/clash-lite-windows-${version}-ia32-portable.7z) | [ARM64](${downloadUrl}/clash-lite-windows-${version}-arm64-portable.7z)\n\n`
-  links += '\n#### Windows7/8：\n\n'
-  links += `- 安装版：[64位](${downloadUrl}/clash-lite-win7-${version}-x64-setup.exe) | [32位](${downloadUrl}/clash-lite-win7-${version}-ia32-setup.exe)\n\n`
-  links += `- 便携版：[64位](${downloadUrl}/clash-lite-win7-${version}-x64-portable.7z) | [32位](${downloadUrl}/clash-lite-win7-${version}-ia32-portable.7z)\n\n`
+  let links = '\n### 下载地址：\n\n#### Windows 10/11：\n\n'
+  links += `- 安装版：[64位](${downloadUrl}/clash-lite-windows-${version}-x64-setup.exe) | [ARM64](${downloadUrl}/clash-lite-windows-${version}-arm64-setup.exe)\n\n`
+  links += `- 便携版：[64位](${downloadUrl}/clash-lite-windows-${version}-x64-portable.7z) | [ARM64](${downloadUrl}/clash-lite-windows-${version}-arm64-portable.7z)\n\n`
   links += '\n#### macOS 11+：\n\n'
   links += `- DMG：[Intel](${downloadUrl}/clash-lite-macos-${version}-x64.dmg) | [Apple Silicon](${downloadUrl}/clash-lite-macos-${version}-arm64.dmg)\n\n`
   links += `- ZIP：[Intel](${downloadUrl}/clash-lite-macos-${version}-x64.zip) | [Apple Silicon](${downloadUrl}/clash-lite-macos-${version}-arm64.zip)\n\n`
-  links += '\n#### macOS 10.15+：\n\n'
-  links += `- DMG：[Intel](${downloadUrl}/clash-lite-catalina-${version}-x64.dmg) | [Apple Silicon](${downloadUrl}/clash-lite-catalina-${version}-arm64.dmg)\n\n`
-  links += `- ZIP：[Intel](${downloadUrl}/clash-lite-catalina-${version}-x64.zip) | [Apple Silicon](${downloadUrl}/clash-lite-catalina-${version}-arm64.zip)\n\n`
   links += '\n#### Linux：\n\n'
   links += `- DEB：[64位](${downloadUrl}/clash-lite-linux-${version}-amd64.deb) | [ARM64](${downloadUrl}/clash-lite-linux-${version}-arm64.deb)\n\n`
   links += `- RPM：[64位](${downloadUrl}/clash-lite-linux-${version}-x86_64.rpm) | [ARM64](${downloadUrl}/clash-lite-linux-${version}-aarch64.rpm)`

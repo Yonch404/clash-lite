@@ -1,8 +1,7 @@
 import { copyFile, rm, writeFile } from 'fs/promises'
 import path from 'path'
 import { existsSync } from 'fs'
-import os from 'os'
-import { exec, execSync, spawn } from 'child_process'
+import { exec, spawn } from 'child_process'
 import { promisify } from 'util'
 import { createHash } from 'crypto'
 import { app, shell } from 'electron'
@@ -55,7 +54,6 @@ export async function downloadAndInstallUpdate(version: string): Promise<void> {
   const githubBase = `https://github.com/Yonch404/clash-lite/releases/download/v${version}/`
   const fileMap = {
     'win32-x64': `clash-lite-windows-${version}-x64-setup.exe`,
-    'win32-ia32': `clash-lite-windows-${version}-ia32-setup.exe`,
     'win32-arm64': `clash-lite-windows-${version}-arm64-setup.exe`,
     'darwin-x64': `clash-lite-macos-${version}-x64.dmg`,
     'darwin-arm64': `clash-lite-macos-${version}-arm64.dmg`
@@ -66,17 +64,6 @@ export async function downloadAndInstallUpdate(version: string): Promise<void> {
   }
   if (!file) {
     throw new Error(i18next.t('common.error.autoUpdateNotSupported'))
-  }
-  if (process.platform === 'win32' && parseInt(os.release()) < 10) {
-    file = file.replace('windows', 'win7')
-  }
-  if (process.platform === 'darwin') {
-    const productVersion = execSync('sw_vers -productVersion', { encoding: 'utf8' })
-      .toString()
-      .trim()
-    if (parseInt(productVersion) < 11) {
-      file = file.replace('macos', 'catalina')
-    }
   }
   const proxy = { protocol: 'http' as const, host: '127.0.0.1', port: mixedPort }
   try {
