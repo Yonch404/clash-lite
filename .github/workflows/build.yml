@@ -11,6 +11,9 @@ on:
 
 permissions: write-all
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   cleanup-dev-release:
     runs-on: ubuntu-latest

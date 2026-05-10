@@ -13,67 +13,6 @@ if (process.argv.slice(2).length !== 0) {
   arch = process.argv.slice(2)[0].replace('--', '')
 }
 
-/* ======= mihomo alpha======= */
-const MIHOMO_ALPHA_VERSION_URL =
-  'https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/version.txt'
-const MIHOMO_ALPHA_URL_PREFIX = `https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha`
-let MIHOMO_ALPHA_VERSION
-
-const MIHOMO_ALPHA_MAP = {
-  'win32-x64': 'mihomo-windows-amd64-compatible',
-  'win32-ia32': 'mihomo-windows-386',
-  'win32-arm64': 'mihomo-windows-arm64',
-  'darwin-x64': 'mihomo-darwin-amd64-compatible',
-  'darwin-arm64': 'mihomo-darwin-arm64',
-  'linux-x64': 'mihomo-linux-amd64-compatible',
-  'linux-arm64': 'mihomo-linux-arm64'
-}
-
-// Fetch the latest alpha release version from the version.txt file
-async function getLatestAlphaVersion() {
-  try {
-    const response = await fetch(MIHOMO_ALPHA_VERSION_URL, {
-      method: 'GET'
-    })
-    let v = await response.text()
-    MIHOMO_ALPHA_VERSION = v.trim() // Trim to remove extra whitespaces
-    console.log(`Latest alpha version: ${MIHOMO_ALPHA_VERSION}`)
-  } catch (error) {
-    console.error('Error fetching latest alpha version:', error.message)
-    process.exit(1)
-  }
-}
-
-/* ======= mihomo smart ======= */
-const MIHOMO_SMART_VERSION_URL =
-  'https://github.com/vernesong/mihomo/releases/download/Prerelease-Alpha/version.txt'
-const MIHOMO_SMART_URL_PREFIX = `https://github.com/vernesong/mihomo/releases/download/Prerelease-Alpha`
-let MIHOMO_SMART_VERSION
-
-const MIHOMO_SMART_MAP = {
-  'win32-x64': 'mihomo-windows-amd64-v2-go120',
-  'win32-ia32': 'mihomo-windows-386-go120',
-  'win32-arm64': 'mihomo-windows-arm64',
-  'darwin-x64': 'mihomo-darwin-amd64-v2-go120',
-  'darwin-arm64': 'mihomo-darwin-arm64',
-  'linux-x64': 'mihomo-linux-amd64-v2-go120',
-  'linux-arm64': 'mihomo-linux-arm64'
-}
-
-async function getLatestSmartVersion() {
-  try {
-    const response = await fetch(MIHOMO_SMART_VERSION_URL, {
-      method: 'GET'
-    })
-    let v = await response.text()
-    MIHOMO_SMART_VERSION = v.trim() // Trim to remove extra whitespaces
-    console.log(`Latest smart version: ${MIHOMO_SMART_VERSION}`)
-  } catch (error) {
-    console.error('Error fetching latest smart version:', error.message)
-    process.exit(1)
-  }
-}
-
 /* ======= mihomo release ======= */
 const MIHOMO_VERSION_URL =
   'https://github.com/MetaCubeX/mihomo/releases/latest/download/version.txt'
@@ -112,34 +51,9 @@ if (!MIHOMO_MAP[`${platform}-${arch}`]) {
   throw new Error(`unsupported platform "${platform}-${arch}"`)
 }
 
-if (!MIHOMO_ALPHA_MAP[`${platform}-${arch}`]) {
-  throw new Error(`unsupported platform "${platform}-${arch}"`)
-}
-
-if (!MIHOMO_SMART_MAP[`${platform}-${arch}`]) {
-  throw new Error(`unsupported platform "${platform}-${arch}"`)
-}
-
 /**
  * core info
  */
-function MihomoAlpha() {
-  const name = MIHOMO_ALPHA_MAP[`${platform}-${arch}`]
-  const isWin = platform === 'win32'
-  const urlExt = isWin ? 'zip' : 'gz'
-  const downloadURL = `${MIHOMO_ALPHA_URL_PREFIX}/${name}-${MIHOMO_ALPHA_VERSION}.${urlExt}`
-  const exeFile = `${name}${isWin ? '.exe' : ''}`
-  const zipFile = `${name}-${MIHOMO_ALPHA_VERSION}.${urlExt}`
-
-  return {
-    name: 'mihomo-alpha',
-    targetFile: `mihomo-alpha${isWin ? '.exe' : ''}`,
-    exeFile,
-    zipFile,
-    downloadURL
-  }
-}
-
 function mihomo() {
   const name = MIHOMO_MAP[`${platform}-${arch}`]
   const isWin = platform === 'win32'
@@ -157,22 +71,6 @@ function mihomo() {
   }
 }
 
-function mihomoSmart() {
-  const name = MIHOMO_SMART_MAP[`${platform}-${arch}`]
-  const isWin = platform === 'win32'
-  const urlExt = isWin ? 'zip' : 'gz'
-  const downloadURL = `${MIHOMO_SMART_URL_PREFIX}/${name}-${MIHOMO_SMART_VERSION}.${urlExt}`
-  const exeFile = `${name}${isWin ? '.exe' : ''}`
-  const zipFile = `${name}-${MIHOMO_SMART_VERSION}.${urlExt}`
-
-  return {
-    name: 'mihomo-smart',
-    targetFile: `mihomo-smart${isWin ? '.exe' : ''}`,
-    exeFile,
-    zipFile,
-    downloadURL
-  }
-}
 /**
  * download sidecar and rename
  */
@@ -450,20 +348,31 @@ const resolveFont = async () => {
   console.log(`[INFO]: NotoColorEmoji.ttf finished`)
 }
 
+const cleanupUnusedMihomoCores = () => {
+  const sidecarDir = path.join(cwd, 'extra', 'sidecar')
+  const staleCoreNames = [
+    `mihomo-alpha${platform === 'win32' ? '.exe' : ''}`,
+    `mihomo-smart${platform === 'win32' ? '.exe' : ''}`
+  ]
+
+  for (const name of staleCoreNames) {
+    const targetPath = path.join(sidecarDir, name)
+    if (fs.existsSync(targetPath)) {
+      fs.rmSync(targetPath)
+      console.log(`[INFO]: removed unused core ${name}`)
+    }
+  }
+}
+
 const tasks = [
   {
-    name: 'mihomo-alpha',
-    func: () => getLatestAlphaVersion().then(() => resolveSidecar(MihomoAlpha())),
-    retry: 5
+    name: 'cleanup-unused-mihomo-cores',
+    func: cleanupUnusedMihomoCores,
+    retry: 1
   },
   {
     name: 'mihomo',
     func: () => getLatestReleaseVersion().then(() => resolveSidecar(mihomo())),
-    retry: 5
-  },
-  {
-    name: 'mihomo-smart',
-    func: () => getLatestSmartVersion().then(() => resolveSidecar(mihomoSmart())),
     retry: 5
   },
   { name: 'mmdb', func: resolveMmdb, retry: 5 },
