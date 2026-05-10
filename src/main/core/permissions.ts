@@ -2,7 +2,7 @@ import { exec } from 'child_process'
 import { promisify } from 'util'
 import { existsSync } from 'fs'
 import path from 'path'
-import { app, dialog, ipcMain } from 'electron'
+import { app, dialog } from 'electron'
 import { mihomoCorePath, mihomoCoreDir } from '../utils/dirs'
 import { managerLogger } from '../utils/logger'
 import i18next from '../../shared/i18n'
@@ -179,7 +179,7 @@ async function checkHighPrivilegeMihomoProcess(): Promise<boolean> {
   return false
 }
 
-export async function restartAsAdmin(forTun: boolean = true): Promise<void> {
+export async function restartAsAdmin(): Promise<void> {
   if (process.platform !== 'win32') {
     throw new Error('This function is only available on Windows')
   }
@@ -195,7 +195,7 @@ export async function restartAsAdmin(forTun: boolean = true): Promise<void> {
 
   const exePath = process.execPath
   const args = process.argv.slice(1).filter((arg) => arg !== '--admin-restart-for-tun')
-  const restartArgs = forTun ? [...args, '--admin-restart-for-tun'] : args
+  const restartArgs = args
 
   const escapedExePath = exePath.replace(/'/g, "''")
   const argsString = restartArgs.map((arg) => arg.replace(/'/g, "''")).join("', '")
@@ -228,12 +228,4 @@ export async function showErrorDialog(title: string, message: string): Promise<v
     buttons: [okText],
     defaultId: 0
   })
-}
-
-export async function checkAdminRestartForTun(restartCore: () => Promise<void>): Promise<void> {
-  if (process.argv.includes('--admin-restart-for-tun')) {
-    managerLogger.info('Detected admin restart flag for TUN mode; restarting core only')
-    await restartCore()
-    ipcMain.emit('updateTrayMenu')
-  }
 }

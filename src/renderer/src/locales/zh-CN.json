@@ -420,6 +420,7 @@
   "tun.permissions.message": "启用 TUN 模式需要管理员权限，是否现在重启应用获取权限？",
   "tun.permissions.failed": "权限授权失败",
   "tun.permissions.restarting": "正在以管理员权限重启应用，请在 UAC 对话框中点击'是'...",
+  "tun.error.tunPermissionDenied": "TUN 模式需要管理员权限，请以管理员权限重启应用后再启用",
   "dns.title": "DNS 设置",
   "dns.enable": "启用 DNS",
   "dns.enhancedMode.title": "域名映射模式",

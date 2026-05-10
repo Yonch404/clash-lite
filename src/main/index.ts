@@ -4,14 +4,14 @@ import { app, dialog } from 'electron'
 import i18next from 'i18next'
 import { initI18n } from '../shared/i18n'
 import { registerIpcMainHandlers } from './utils/ipc'
-import { getAppConfig, patchAppConfig } from './config'
+import { getAppConfig, getControledMihomoConfig, patchAppConfig } from './config'
 import {
   startCore,
-  checkAdminRestartForTun,
   checkHighPrivilegeCore,
   restartAsAdmin,
   initAdminStatus,
   checkAdminPrivileges,
+  getSessionAdminStatus,
   initCoreWatcher
 } from './core/manager'
 import { createTray } from './resolve/tray'
@@ -128,7 +128,7 @@ async function checkHighPrivilegeCoreEarly(): Promise<void> {
 
     if (choice === 0) {
       try {
-        await restartAsAdmin(false)
+        await restartAsAdmin()
         app.exit(0)
       } catch (error) {
         safeShowErrorBox('common.error.adminRequired', `${error}`)
@@ -140,6 +140,39 @@ async function checkHighPrivilegeCoreEarly(): Promise<void> {
   } catch (e) {
     mainLogger.error('Failed to check high privilege core', e)
   }
+}
+
+async function ensureAdminForEnabledTunOnWindows(): Promise<boolean> {
+  if (process.platform !== 'win32') return true
+  if (getSessionAdminStatus()) return true
+
+  const mihomoConfig = await getControledMihomoConfig()
+  const tunEnabled = mihomoConfig.tun?.enable ?? true
+  if (!tunEnabled) return true
+
+  mainLogger.info('TUN is enabled without administrator privileges; requesting elevation')
+  const choice = dialog.showMessageBoxSync({
+    type: 'warning',
+    title: i18next.t('tun.permissions.title'),
+    message: i18next.t('tun.permissions.message'),
+    buttons: [i18next.t('common.confirm'), i18next.t('common.cancel')],
+    defaultId: 0,
+    cancelId: 1
+  })
+
+  if (choice === 0) {
+    try {
+      await restartAsAdmin()
+    } catch (error) {
+      safeShowErrorBox('common.error.adminRequired', `${error}`)
+      app.exit(1)
+    }
+    return false
+  }
+
+  mainLogger.info('User canceled administrator restart for enabled TUN; exiting before core start')
+  app.exit(0)
+  return false
 }
 
 async function initHardwareAcceleration(): Promise<void> {
@@ -195,6 +228,8 @@ app.whenReady().then(async () => {
   electronApp.setAppUserModelId('lite.clash.app')
 
   const appConfig = await initPromise
+  const canContinueStartup = await ensureAdminForEnabledTunOnWindows()
+  if (!canContinueStartup) return
 
   registerIpcMainHandlers()
 
@@ -211,7 +246,6 @@ app.whenReady().then(async () => {
       if (startPromises.length > 0) {
         startPromises[0].then(async () => {
           await initProfileUpdater()
-          await checkAdminRestartForTun()
         })
       }
       coreStarted = true

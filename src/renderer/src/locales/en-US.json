@@ -420,6 +420,7 @@
   "tun.permissions.message": "TUN mode requires administrator privileges. Restart the application now to get permissions?",
   "tun.permissions.failed": "Permission authorization failed",
   "tun.permissions.restarting": "Restarting application with administrator privileges, please click 'Yes' in the UAC dialog...",
+  "tun.error.tunPermissionDenied": "TUN mode requires administrator privileges. Restart the app as administrator before enabling it.",
   "dns.title": "DNS Settings",
   "dns.enable": "Enable DNS",
   "dns.enhancedMode.title": "Domain Mapping Mode",

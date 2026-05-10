@@ -36,11 +36,7 @@ import {
   getAxios
 } from './mihomoApi'
 import { generateProfile } from './factory'
-import {
-  checkAdminRestartForTun as checkAdminRestartForTunWithRestart,
-  getSessionAdminStatus,
-  setStopCoreBeforeAdminRestart
-} from './permissions'
+import { getSessionAdminStatus, setStopCoreBeforeAdminRestart } from './permissions'
 import {
   cleanupSocketFile,
   cleanupWindowsNamedPipes,
@@ -146,6 +142,9 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
   const core = 'mihomo'
 
   const { 'log-level': logLevel = 'info' as LogLevel, tun } = mihomoConfig
+  if (process.platform === 'win32' && (tun?.enable ?? true) && !getSessionAdminStatus()) {
+    throw new Error(i18next.t('tun.error.tunPermissionDenied'))
+  }
 
   // 清理旧进程
   const pidPath = path.join(dataDir(), 'core.pid')
@@ -474,9 +473,4 @@ async function checkProfile(
       throw new Error(`${i18next.t('mihomo.error.profileCheckFailed')}: ${error}`)
     }
   }
-}
-
-// 权限检查入口（从 permissions.ts 调用）
-export async function checkAdminRestartForTun(): Promise<void> {
-  await checkAdminRestartForTunWithRestart(restartCore)
 }

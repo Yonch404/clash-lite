@@ -6,6 +6,8 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import React from 'react'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { useTranslation } from 'react-i18next'
+import { checkAdminPrivileges, restartAsAdmin } from '@renderer/utils/ipc'
+import { platform } from '@renderer/utils/init'
 import { handleSiderCardPointerDown, handleSiderCardPress, siderCardClass } from './sider-card'
 
 interface Props {
@@ -26,10 +28,25 @@ const TunSwitcher: React.FC<Props> = (props) => {
     void navigate('/tun')
   }
   const onChange = async (enable: boolean): Promise<void> => {
+    if (enable && platform === 'win32') {
+      const isAdmin = await checkAdminPrivileges()
+      if (!isAdmin) {
+        const confirmed = window.confirm(t('tun.permissions.message'))
+        if (!confirmed) return
+
+        await patchControledMihomoConfig({ tun: { enable } })
+        window.electron.ipcRenderer.send('updateFloatingWindow')
+        window.electron.ipcRenderer.send('updateTrayMenu')
+        await window.electron.ipcRenderer.invoke('updateTrayIcon')
+        await restartAsAdmin()
+        return
+      }
+    }
+
     await patchControledMihomoConfig({ tun: { enable } })
     window.electron.ipcRenderer.send('updateFloatingWindow')
     window.electron.ipcRenderer.send('updateTrayMenu')
-    window.electron.ipcRenderer.invoke('updateTrayIcon')
+    await window.electron.ipcRenderer.invoke('updateTrayIcon')
   }
 
   if (iconOnly) {
