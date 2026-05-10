@@ -240,7 +240,7 @@ async function cleanup(): Promise<void> {
   const [dataFiles, logFiles] = await Promise.all([readdir(dataDir()), readdir(logDir())])
 
   // 清理更新缓存
-  const cacheExtensions = ['.exe', '.pkg', '.7z']
+  const cacheExtensions = ['.exe', '.dmg', '.zip', '.7z']
   const cacheCleanup = dataFiles
     .filter((file) => cacheExtensions.some((ext) => file.endsWith(ext)))
     .map((file) => rm(path.join(dataDir(), file)).catch(() => {}))

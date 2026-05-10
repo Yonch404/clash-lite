@@ -39,10 +39,9 @@ nsis:
 mac:
   icon: build/app-icon.png
   target:
-    - pkg
-  entitlementsInherit: build/entitlements.mac.plist
-  hardenedRuntime: true
-  gatekeeperAssess: false
+    - dmg
+    - zip
+  identity: null
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.
     - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
@@ -50,13 +49,8 @@ mac:
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
   notarize: false
   artifactName: clash-lite-macos-${version}-${arch}.${ext}
-pkg:
-  allowAnywhere: false
-  allowCurrentUserHome: false
-  isRelocatable: false
-  background:
-    alignment: bottomleft
-    file: build/background.png
+dmg:
+  background: build/background.png
 linux:
   executableName: clash-lite
   icon: build/app-icon.png

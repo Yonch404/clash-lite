@@ -57,8 +57,8 @@ export async function downloadAndInstallUpdate(version: string): Promise<void> {
     'win32-x64': `clash-lite-windows-${version}-x64-setup.exe`,
     'win32-ia32': `clash-lite-windows-${version}-ia32-setup.exe`,
     'win32-arm64': `clash-lite-windows-${version}-arm64-setup.exe`,
-    'darwin-x64': `clash-lite-macos-${version}-x64.pkg`,
-    'darwin-arm64': `clash-lite-macos-${version}-arm64.pkg`
+    'darwin-x64': `clash-lite-macos-${version}-x64.dmg`,
+    'darwin-arm64': `clash-lite-macos-${version}-arm64.dmg`
   }
   let file = fileMap[`${process.platform}-${process.arch}`]
   if (isPortable()) {
@@ -166,17 +166,8 @@ export async function downloadAndInstallUpdate(version: string): Promise<void> {
       ).unref()
       app.quit()
     }
-    if (file.endsWith('.pkg')) {
-      try {
-        const execPromise = promisify(exec)
-        const shell = `installer -pkg ${path.join(dataDir(), file).replace(' ', '\\\\ ')} -target /`
-        const command = `do shell script "${shell}" with administrator privileges`
-        await execPromise(`osascript -e '${command}'`)
-        app.relaunch()
-        app.quit()
-      } catch {
-        shell.openPath(path.join(dataDir(), file))
-      }
+    if (file.endsWith('.dmg') || file.endsWith('.zip')) {
+      await shell.openPath(path.join(dataDir(), file))
     }
   } catch (e) {
     rm(path.join(dataDir(), file))
