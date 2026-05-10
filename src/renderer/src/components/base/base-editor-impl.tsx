@@ -9,7 +9,8 @@ import { nanoid } from 'nanoid'
 import type { BaseEditorProps } from './base-editor'
 
 let initialized = false
-const metaSchemaProperties = (metaSchema as { properties?: Record<string, unknown> }).properties ?? {}
+const metaSchemaProperties =
+  (metaSchema as { properties?: Record<string, unknown> }).properties ?? {}
 const monacoInitialization = (): void => {
   if (initialized) return
 

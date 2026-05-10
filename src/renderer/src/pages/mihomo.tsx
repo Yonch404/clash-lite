@@ -74,7 +74,9 @@ const Mihomo: React.FC = () => {
         </SettingItem>
         <SettingItem title="sing-box">
           <div className="flex items-center gap-3">
-            <span className="text-foreground-500 text-sm">{singBoxCoreVersion?.version || '-'}</span>
+            <span className="text-foreground-500 text-sm">
+              {singBoxCoreVersion?.version || '-'}
+            </span>
             <Button
               size="sm"
               color="primary"
