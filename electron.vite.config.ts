@@ -18,20 +18,32 @@ const monacoEditorPlugin = isObjectWithDefaultFunction(monacoEditorPluginModule)
 const isProduction =
   process.env.NODE_ENV === 'production' || process.env.npm_lifecycle_event?.startsWith('build')
 
+const terserOptions = {
+  compress: {
+    drop_console: true,
+    drop_debugger: true
+  },
+  format: {
+    comments: false
+  }
+}
+
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
     build: {
-      target: 'node20',
-      minify: isProduction,
+      target: 'node24',
+      minify: isProduction ? 'terser' : false,
+      terserOptions,
       sourcemap: false
     }
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
     build: {
-      target: 'node20',
-      minify: isProduction,
+      target: 'node24',
+      minify: isProduction ? 'terser' : false,
+      terserOptions,
       sourcemap: false,
       rollupOptions: {
         output: {
@@ -43,9 +55,10 @@ export default defineConfig({
   },
   renderer: {
     build: {
-      target: 'chrome120',
-      cssTarget: 'chrome120',
-      minify: 'esbuild',
+      target: 'chrome148',
+      cssTarget: 'chrome148',
+      minify: isProduction ? 'terser' : false,
+      terserOptions,
       sourcemap: false,
       rollupOptions: {
         input: {
@@ -55,8 +68,7 @@ export default defineConfig({
       }
     },
     esbuild: {
-      legalComments: 'none',
-      drop: isProduction ? ['debugger'] : []
+      legalComments: 'none'
     },
     resolve: {
       alias: {
