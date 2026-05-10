@@ -139,6 +139,8 @@
   "mihomo.CoreAuthLost": "مجوز هسته از دست رفت",
   "mihomo.coreUpgradeSuccess": "ارتقاء هسته با موفقیت انجام شد. اگر می‌خواهید از کارت شبکه مجازی (Tun) استفاده کنید، لطفا به صفحه کارت شبکه مجازی بروید و مجددا به صورت دستی به هسته مجوز دهید",
   "mihomo.alreadyLatestVersion": "آخرین نسخه نصب شده است",
+  "singBox.upgradeCore": "ارتقاء sing-box",
+  "singBox.coreUpgradeSuccess": "ارتقاء sing-box با موفقیت انجام شد",
   "mihomo.selectCoreVersion": "انتخاب نسخه هسته",
   "mihomo.stableVersion": "نسخه پایدار",
   "mihomo.alphaVersion": "نسخه آلفا",

@@ -161,6 +161,8 @@
   "mihomo.CoreAuthLost": "Core Authorization Lost",
   "mihomo.coreUpgradeSuccess": "Core upgrade successful. If TUN cannot start, reinstall the Deb/RPM package or manually grant TUN permissions to the core file",
   "mihomo.alreadyLatestVersion": "Already Latest Version",
+  "singBox.upgradeCore": "Update sing-box",
+  "singBox.coreUpgradeSuccess": "sing-box upgrade successful",
   "mihomo.selectCoreVersion": "Select Core Version",
   "mihomo.stableVersion": "Stable",
   "mihomo.alphaVersion": "Alpha",

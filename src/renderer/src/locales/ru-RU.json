@@ -141,6 +141,8 @@
   "mihomo.coreAuthLost": "Потеряна авторизация ядра",
   "mihomo.coreUpgradeSuccess": "Ядро успешно обновлено. Если вы хотите использовать виртуальную сетевую карту (Tun), пожалуйста, перейдите на страницу виртуальной сетевой карты для повторной авторизации ядра",
   "mihomo.alreadyLatestVersion": "Уже последняя версия",
+  "singBox.upgradeCore": "Обновить sing-box",
+  "singBox.coreUpgradeSuccess": "sing-box успешно обновлён",
   "mihomo.selectCoreVersion": "Выберите версию ядра",
   "mihomo.stableVersion": "Стабильная",
   "mihomo.alphaVersion": "Альфа",

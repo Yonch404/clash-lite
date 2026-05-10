@@ -31,6 +31,7 @@ import {
   profilePath,
   profilesDir,
   resourcesFilesDir,
+  singBoxWorkDir,
   themesDir
 } from './dirs'
 import { initLogger } from './logger'
@@ -93,6 +94,7 @@ async function initDirs(): Promise<void> {
     themesDir(),
     profilesDir(),
     mihomoWorkDir(),
+    singBoxWorkDir(),
     logDir(),
     mihomoTestDir()
   ]
@@ -132,7 +134,7 @@ async function killOldMihomoProcesses(): Promise<void> {
 
   try {
     const execFilePromise = promisify(execFile)
-    const coreNames = new Set(['mihomo.exe'])
+    const coreNames = new Set(['mihomo.exe', 'sing-box.exe'])
     const { stdout } = await execFilePromise('tasklist', ['/FO', 'CSV', '/NH'])
 
     const pids = stdout
@@ -240,7 +242,7 @@ async function cleanup(): Promise<void> {
   const [dataFiles, logFiles] = await Promise.all([readdir(dataDir()), readdir(logDir())])
 
   // 清理更新缓存
-  const cacheExtensions = ['.exe', '.dmg', '.zip', '.7z']
+  const cacheExtensions = ['.exe', '.dmg', '.zip', '.7z', '.tar.gz', '.tgz']
   const cacheCleanup = dataFiles
     .filter((file) => cacheExtensions.some((ext) => file.endsWith(ext)))
     .map((file) => rm(path.join(dataDir(), file)).catch(() => {}))

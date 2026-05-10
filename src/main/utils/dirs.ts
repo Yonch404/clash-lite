@@ -68,6 +68,11 @@ export function mihomoCorePath(core: string): string {
   return path.join(mihomoCoreDir(), `${core}${isWin ? '.exe' : ''}`)
 }
 
+export function singBoxCorePath(): string {
+  const isWin = process.platform === 'win32'
+  return path.join(mihomoCoreDir(), `sing-box${isWin ? '.exe' : ''}`)
+}
+
 export function appConfigPath(): string {
   return path.join(dataDir(), 'config.yaml')
 }
@@ -106,6 +111,18 @@ export function mihomoWorkConfigPath(id: string | undefined): string {
   } else {
     return path.join(mihomoProfileWorkDir(id), 'config.yaml')
   }
+}
+
+export function singBoxWorkDir(): string {
+  return path.join(dataDir(), 'sing-box')
+}
+
+export function singBoxWorkConfigPath(): string {
+  return path.join(singBoxWorkDir(), 'config.json')
+}
+
+export function singBoxPidPath(): string {
+  return path.join(singBoxWorkDir(), 'sing-box.pid')
 }
 
 export function logDir(): string {

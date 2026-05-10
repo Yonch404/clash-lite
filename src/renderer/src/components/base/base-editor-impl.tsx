@@ -9,6 +9,7 @@ import { nanoid } from 'nanoid'
 import type { BaseEditorProps } from './base-editor'
 
 let initialized = false
+const metaSchemaProperties = (metaSchema as { properties?: Record<string, unknown> }).properties ?? {}
 const monacoInitialization = (): void => {
   if (initialized) return
 
@@ -23,6 +24,20 @@ const monacoInitialization = (): void => {
         // @ts-ignore // type JSONSchema7
         schema: {
           ...metaSchema,
+          properties: {
+            ...metaSchemaProperties,
+            'clash-lite': {
+              type: 'object',
+              description: 'Clash Lite custom configuration',
+              properties: {
+                'sing-box': {
+                  oneOf: [{ type: 'string' }, { type: 'object' }],
+                  description: 'sing-box JSON configuration'
+                }
+              },
+              additionalProperties: true
+            }
+          },
           patternProperties: {
             '\\+rules': {
               type: 'array',

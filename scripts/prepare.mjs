@@ -28,6 +28,10 @@ const MIHOMO_MAP = {
   'linux-arm64': 'mihomo-linux-arm64'
 }
 
+/* ======= sing-box release ======= */
+const SING_BOX_VERSION = '1.13.11'
+const SING_BOX_URL_PREFIX = `https://github.com/SagerNet/sing-box/releases/download/v${SING_BOX_VERSION}`
+
 // Fetch the latest release version from the version.txt file
 async function getLatestReleaseVersion() {
   try {
@@ -169,6 +173,36 @@ async function resolveResource(binInfo) {
   console.log(`[INFO]: ${file} finished`)
 }
 
+function copyExtractedFiles(sourceDir, targetDir) {
+  const entries = fs.readdirSync(sourceDir, { withFileTypes: true })
+  for (const entry of entries) {
+    const sourcePath = path.join(sourceDir, entry.name)
+    if (entry.isDirectory()) {
+      copyExtractedFiles(sourcePath, targetDir)
+      continue
+    }
+    if (!entry.isFile()) continue
+
+    const targetPath = path.join(targetDir, entry.name)
+    fs.copyFileSync(sourcePath, targetPath)
+    if (entry.name === 'sing-box' || entry.name === 'sing-box.exe') {
+      fs.chmodSync(targetPath, 0o755)
+    }
+  }
+}
+
+function cleanupSingBoxArtifacts(sidecarDir) {
+  if (!fs.existsSync(sidecarDir)) return
+
+  const entries = fs.readdirSync(sidecarDir, { withFileTypes: true })
+  for (const entry of entries) {
+    if (!entry.name.startsWith('sing-box') && !entry.name.startsWith('libcronet')) {
+      continue
+    }
+    fs.rmSync(path.join(sidecarDir, entry.name), { recursive: true, force: true })
+  }
+}
+
 /**
  * download file and save to `path`
  */
@@ -301,32 +335,67 @@ const resolve7zip = () =>
     file: '7za.exe',
     downloadURL: `https://github.com/develar/7zip-bin/raw/master/win/${arch}/7za.exe`
   })
-const resolveSubstore = () =>
-  resolveResource({
-    file: 'sub-store.bundle.cjs',
-    downloadURL:
-      'https://github.com/sub-store-org/Sub-Store/releases/latest/download/sub-store.bundle.js'
-  })
-const resolveSubstoreFrontend = async () => {
-  const tempDir = path.join(TEMP_DIR, 'substore-frontend')
-  const tempZip = path.join(tempDir, 'dist.zip')
+function getSingBoxAssetName() {
+  const platformArch = `${platform}-${arch}`
+  switch (platformArch) {
+    case 'win32-x64':
+      return `sing-box-${SING_BOX_VERSION}-windows-amd64.zip`
+    case 'win32-arm64':
+      return `sing-box-${SING_BOX_VERSION}-windows-arm64.zip`
+    case 'darwin-x64':
+      return `sing-box-${SING_BOX_VERSION}-darwin-amd64.tar.gz`
+    case 'darwin-arm64':
+      return `sing-box-${SING_BOX_VERSION}-darwin-arm64.tar.gz`
+    case 'linux-x64':
+      return `sing-box-${SING_BOX_VERSION}-linux-amd64.tar.gz`
+    case 'linux-arm64':
+      return `sing-box-${SING_BOX_VERSION}-linux-arm64.tar.gz`
+    default:
+      throw new Error(`Unsupported platform for sing-box: ${platformArch}`)
+  }
+}
+
+const resolveSingBox = async () => {
+  const assetName = getSingBoxAssetName()
+  const downloadURL = `${SING_BOX_URL_PREFIX}/${assetName}`
+  const tempDir = path.join(TEMP_DIR, 'sing-box')
+  const tempArchive = path.join(tempDir, assetName)
+  const extractedDir = path.join(tempDir, 'extract')
+  const sidecarDir = path.join(cwd, 'extra', 'sidecar')
+
   if (!fs.existsSync(tempDir)) {
     fs.mkdirSync(tempDir, { recursive: true })
   }
-  await downloadFile(
-    'https://github.com/sub-store-org/Sub-Store-Front-End/releases/latest/download/dist.zip',
-    tempZip
-  )
-  const zip = new AdmZip(tempZip)
-  const resDir = path.join(cwd, 'extra', 'files')
-  const targetPath = path.join(resDir, 'sub-store-frontend')
-  if (fs.existsSync(targetPath)) {
-    fs.rmSync(targetPath, { recursive: true })
+  if (!fs.existsSync(sidecarDir)) {
+    fs.mkdirSync(sidecarDir, { recursive: true })
   }
-  zip.extractAllTo(resDir, true)
-  fs.renameSync(path.join(resDir, 'dist'), targetPath)
 
-  console.log(`[INFO]: sub-store-frontend finished`)
+  if (fs.existsSync(tempArchive)) {
+    fs.rmSync(tempArchive)
+  }
+
+  cleanupSingBoxArtifacts(sidecarDir)
+
+  try {
+    await downloadFile(downloadURL, tempArchive)
+    fs.mkdirSync(extractedDir, { recursive: true })
+
+    if (assetName.endsWith('.zip')) {
+      const zip = new AdmZip(tempArchive)
+      zip.extractAllTo(extractedDir, true)
+    } else {
+      await extract({
+        cwd: extractedDir,
+        file: tempArchive
+      })
+    }
+
+    copyExtractedFiles(extractedDir, sidecarDir)
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true })
+  }
+
+  console.log(`[INFO]: sing-box finished`)
 }
 const resolveFont = async () => {
   const targetPath = path.join(cwd, 'src', 'renderer', 'src', 'assets', 'NotoColorEmoji.ttf')
@@ -358,7 +427,25 @@ const cleanupUnusedMihomoCores = () => {
   }
 }
 
+const cleanupUnusedSubstoreArtifacts = () => {
+  const filesDir = path.join(cwd, 'extra', 'files')
+  const staleNames = ['sub-store.bundle.cjs', 'sub-store-frontend']
+
+  for (const name of staleNames) {
+    const targetPath = path.join(filesDir, name)
+    if (fs.existsSync(targetPath)) {
+      fs.rmSync(targetPath, { recursive: true, force: true })
+      console.log(`[INFO]: removed unused substore artifact ${name}`)
+    }
+  }
+}
+
 const tasks = [
+  {
+    name: 'cleanup-unused-substore-artifacts',
+    func: cleanupUnusedSubstoreArtifacts,
+    retry: 1
+  },
   {
     name: 'cleanup-unused-mihomo-cores',
     func: cleanupUnusedMihomoCores,
@@ -367,6 +454,11 @@ const tasks = [
   {
     name: 'mihomo',
     func: () => getLatestReleaseVersion().then(() => resolveSidecar(mihomo())),
+    retry: 5
+  },
+  {
+    name: 'sing-box',
+    func: resolveSingBox,
     retry: 5
   },
   { name: 'mmdb', func: resolveMmdb, retry: 5 },
@@ -395,16 +487,6 @@ const tasks = [
     func: resolveMonitor,
     retry: 5,
     winOnly: true
-  },
-  {
-    name: 'substore',
-    func: resolveSubstore,
-    retry: 5
-  },
-  {
-    name: 'substorefrontend',
-    func: resolveSubstoreFrontend,
-    retry: 5
   },
   {
     name: '7zip',

@@ -1,12 +1,12 @@
 # Clash Lite
 
-Clash Lite is a streamlined desktop GUI for [Mihomo](https://github.com/MetaCubeX/mihomo), focused on subscription import, proxy selection, system proxy, TUN mode, connections, logs, tray, and floating-window essentials.
+Clash Lite is a streamlined desktop GUI for [Mihomo](https://github.com/MetaCubeX/mihomo), with an optional [sing-box](https://github.com/SagerNet/sing-box) secondary core for profiles that declare a `clash-lite.sing-box` payload. It stays focused on subscription import, proxy selection, system proxy, TUN mode, connections, logs, tray, and floating-window essentials.
 
 Clash Lite is published as an independent application with its own data directory, update channel, package identifiers, and release repository.
 
 ## Scope
 
-- Built on the stable Mihomo core.
+- Built on the stable Mihomo core, with sing-box as an optional secondary runtime.
 - Supports remote and local profiles, profile update, proxy group switching, connection view, logs, and lightweight network status.
 - Keeps TUN mode available from the sidebar, enabled by default for new configurations, and limited to a simple on/off switch plus firewall reset page.
 - Keeps only the stable non-Smart core update flow.
@@ -15,7 +15,7 @@ Clash Lite is published as an independent application with its own data director
 
 ## Configuration Policy
 
-Clash Lite avoids rewriting subscription-provided runtime settings for removed features. The controlled runtime configuration is limited to the remaining application-owned settings. Removed features have no visible entries and no background runtime hooks.
+Clash Lite avoids rewriting subscription-provided runtime settings for removed features. The controlled runtime configuration is limited to the remaining application-owned settings. Removed features have no visible entries and no background runtime hooks. The custom `clash-lite` block is stripped before Mihomo receives its runtime profile, while its sing-box JSON payload is kept for the secondary core.
 
 TUN mode defaults to enabled for new controlled configs, but the sidebar switch remains authoritative. If a user turns TUN off, Clash Lite keeps that state instead of forcing it back on.
 
@@ -58,5 +58,5 @@ pnpm run dev
 
 - Application name: Clash Lite
 - Package name: `clash-lite`
-- Core: Mihomo stable
+- Core: Mihomo stable + optional sing-box secondary core
 - License: follow the upstream project license and third-party dependency licenses.

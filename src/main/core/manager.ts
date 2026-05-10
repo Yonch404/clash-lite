@@ -16,7 +16,8 @@ import {
   mihomoProfileWorkDir,
   mihomoTestDir,
   mihomoWorkConfigPath,
-  mihomoWorkDir
+  mihomoWorkDir,
+  singBoxPidPath
 } from '../utils/dirs'
 import { startMonitor } from '../resolve/trafficMonitor'
 import { ensureRuntimeFiles, safeShowErrorBox } from '../utils/init'
@@ -47,6 +48,7 @@ import {
   validateWindowsPipeAccess,
   waitForCoreReady
 } from './process'
+import { stopSingBoxCore, syncSingBoxCore } from './singBox'
 
 // 重新导出权限相关函数
 export {
@@ -158,15 +160,19 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
   }
 
   // 清理旧进程
-  const pidPath = path.join(dataDir(), 'core.pid')
-  if (existsSync(pidPath)) {
-    const pid = parseInt(await readFile(pidPath, 'utf-8'))
-    try {
-      process.kill(pid, 'SIGINT')
-    } catch {
-      // ignore
-    } finally {
-      await rm(pidPath)
+  const pidPaths = [path.join(dataDir(), 'core.pid'), singBoxPidPath()]
+  for (const pidPath of pidPaths) {
+    if (existsSync(pidPath)) {
+      const pid = parseInt(await readFile(pidPath, 'utf-8'), 10)
+      try {
+        if (!Number.isNaN(pid) && pid !== process.pid) {
+          process.kill(pid, 'SIGINT')
+        }
+      } catch {
+        // ignore
+      } finally {
+        await rm(pidPath, { force: true })
+      }
     }
   }
 
@@ -355,25 +361,39 @@ function setupCoreListeners(
 // 启动核心
 export async function startCore(detached = false, skipStop = false): Promise<Promise<void>[]> {
   const config = await prepareCore(detached, skipStop)
-  const proc = spawnCoreProcess(config)
-  child = proc
 
-  if (detached) {
-    managerLogger.info(
-      `Core process detached successfully on ${process.platform}, PID: ${proc.pid}`
-    )
-    proc.unref()
-    return [new Promise(() => {})]
+  try {
+    await syncSingBoxCore(detached)
+    const proc = spawnCoreProcess(config)
+    child = proc
+
+    if (detached) {
+      managerLogger.info(
+        `Core process detached successfully on ${process.platform}, PID: ${proc.pid}`
+      )
+      proc.unref()
+      return [new Promise(() => {})]
+    }
+
+    const startupPromise = new Promise<Promise<void>[]>((resolve, reject) => {
+      setupCoreListeners(proc, config.logLevel, resolve, reject)
+    })
+
+    return startupPromise.catch(async (error) => {
+      await stopSingBoxCore()
+      throw error
+    })
+  } catch (error) {
+    await stopSingBoxCore()
+    throw error
   }
-
-  return new Promise((resolve, reject) => {
-    setupCoreListeners(proc, config.logLevel, resolve, reject)
-  })
 }
 
 // 停止核心
 export async function stopCore(force = false): Promise<void> {
   void force
+
+  await stopSingBoxCore()
 
   if (child) {
     child.removeAllListeners()

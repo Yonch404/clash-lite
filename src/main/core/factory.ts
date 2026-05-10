@@ -1,8 +1,13 @@
-import { copyFile, mkdir, writeFile, stat } from 'fs/promises'
+import { copyFile, mkdir, rm, stat, writeFile } from 'fs/promises'
 import { existsSync } from 'fs'
 import path from 'path'
 import { getControledMihomoConfig, getProfileConfig, getProfile, getAppConfig } from '../config'
-import { mihomoProfileWorkDir, mihomoWorkConfigPath, mihomoWorkDir } from '../utils/dirs'
+import {
+  mihomoProfileWorkDir,
+  mihomoWorkConfigPath,
+  mihomoWorkDir,
+  singBoxWorkConfigPath
+} from '../utils/dirs'
 import { stringify } from '../utils/yaml'
 import { deepMerge } from '../utils/merge'
 
@@ -31,6 +36,39 @@ const CONTROLLED_CONFIG_KEYS: (keyof IMihomoConfig)[] = [
 
 let runtimeConfigStr: string = ''
 let runtimeConfig: IMihomoConfig = {} as IMihomoConfig
+let runtimeSingBoxConfigStr = ''
+
+function normalizeSingBoxConfig(config: unknown): string {
+  if (config == null) return ''
+
+  if (typeof config === 'string') {
+    const trimmed = config.trim()
+    if (!trimmed) return ''
+
+    try {
+      return JSON.stringify(JSON.parse(trimmed), null, 2)
+    } catch (error) {
+      throw new Error(
+        `Invalid Clash Lite sing-box config: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+  }
+
+  return JSON.stringify(config, null, 2)
+}
+
+async function persistRuntimeSingBoxConfig(config: IClashLiteConfig | undefined): Promise<void> {
+  const normalized = normalizeSingBoxConfig(config?.['sing-box'])
+  runtimeSingBoxConfigStr = normalized
+
+  const configPath = singBoxWorkConfigPath()
+  if (normalized) {
+    await mkdir(path.dirname(configPath), { recursive: true })
+    await writeFile(configPath, normalized)
+  } else if (existsSync(configPath)) {
+    await rm(configPath, { force: true })
+  }
+}
 
 function pickRuntimeControlledConfig(config: Partial<IMihomoConfig>): Partial<IMihomoConfig> {
   const picked: Partial<IMihomoConfig> = {}
@@ -51,6 +89,11 @@ export async function generateProfile(): Promise<string | undefined> {
   const baseProfile = await getProfile(current)
   const controlledConfig = pickRuntimeControlledConfig(await getControledMihomoConfig())
   const profile = deepMerge(baseProfile, controlledConfig)
+  const profileRecord = profile as unknown as Record<string, unknown>
+  const clashLiteConfig = profileRecord['clash-lite'] as IClashLiteConfig | undefined
+
+  delete profileRecord['clash-lite']
+  await persistRuntimeSingBoxConfig(clashLiteConfig)
 
   profile.tun = {
     ...(baseProfile.tun || {}),
@@ -117,4 +160,8 @@ export async function getRuntimeConfigStr(): Promise<string> {
 
 export async function getRuntimeConfig(): Promise<IMihomoConfig> {
   return runtimeConfig
+}
+
+export async function getRuntimeSingBoxConfigStr(): Promise<string> {
+  return runtimeSingBoxConfigStr
 }

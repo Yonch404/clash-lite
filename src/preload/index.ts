@@ -14,6 +14,8 @@ const validInvokeChannels = [
   'mihomoUpgrade',
   'mihomoProxyDelay',
   'mihomoGroupDelay',
+  'singBoxVersion',
+  'singBoxUpgrade',
   'patchMihomoConfig',
   // AutoRun
   'checkAutoRun',
