@@ -14,16 +14,17 @@ import {
 import { calcPercent, calcTraffic } from '@renderer/utils/calc'
 import { IoMdMore, IoMdRefresh } from 'react-icons/io'
 import dayjs from '@renderer/utils/dayjs'
-import React, { Key, useMemo, useState } from 'react'
+import React, { Key, lazy, Suspense, useMemo, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { openFile } from '@renderer/utils/ipc'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { useTranslation } from 'react-i18next'
 import BaseConfirmModal from '../base/base-confirm-modal'
-import EditInfoModal from './edit-info-modal'
-import EditFileModal from './edit-file-modal'
-import QrCodeModal from './qr-code-modal'
+
+const EditInfoModal = lazy(() => import('./edit-info-modal'))
+const EditFileModal = lazy(() => import('./edit-file-modal'))
+const QrCodeModal = lazy(() => import('./qr-code-modal'))
 
 interface Props {
   info: IProfileItem
@@ -225,16 +226,24 @@ const ProfileItem: React.FC<Props> = (props) => {
         zIndex: isDragging ? 'calc(infinity)' : undefined
       }}
     >
-      {openFileEditor && <EditFileModal id={info.id} onClose={() => setOpenFileEditor(false)} />}
+      {openFileEditor && (
+        <Suspense fallback={null}>
+          <EditFileModal id={info.id} onClose={() => setOpenFileEditor(false)} />
+        </Suspense>
+      )}
       {openQrCode && info.url && (
-        <QrCodeModal url={info.url} onClose={() => setOpenQrCode(false)} />
+        <Suspense fallback={null}>
+          <QrCodeModal url={info.url} onClose={() => setOpenQrCode(false)} />
+        </Suspense>
       )}
       {openInfoEditor && (
-        <EditInfoModal
-          item={info}
-          onClose={() => setOpenInfoEditor(false)}
-          updateProfileItem={updateProfileItem}
-        />
+        <Suspense fallback={null}>
+          <EditInfoModal
+            item={info}
+            onClose={() => setOpenInfoEditor(false)}
+            updateProfileItem={updateProfileItem}
+          />
+        </Suspense>
       )}
       {showDeleteConfirm && (
         <BaseConfirmModal

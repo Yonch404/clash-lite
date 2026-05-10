@@ -3,13 +3,14 @@ import BasePage from '@renderer/components/base/base-page'
 import { showErrorSync } from '@renderer/utils/error-display'
 import SettingCard from '@renderer/components/base/base-setting-card'
 import SettingItem from '@renderer/components/base/base-setting-item'
-import PacEditorModal from '@renderer/components/sysproxy/pac-editor-modal'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { platform } from '@renderer/utils/init'
 import { openUWPTool, triggerSysProxy } from '@renderer/utils/ipc'
-import React, { Key, useState } from 'react'
+import React, { Key, lazy, Suspense, useState } from 'react'
 import { MdDeleteForever } from 'react-icons/md'
 import { useTranslation } from 'react-i18next'
+
+const PacEditorModal = lazy(() => import('@renderer/components/sysproxy/pac-editor-modal'))
 
 const defaultPacScript = `
 function FindProxyForURL(url, host) {
@@ -123,14 +124,16 @@ const Sysproxy: React.FC = () => {
       }
     >
       {openPacEditor && (
-        <PacEditorModal
-          script={values.pacScript || defaultPacScript}
-          onCancel={() => setOpenPacEditor(false)}
-          onConfirm={(script: string) => {
-            setValues({ ...values, pacScript: script })
-            setOpenPacEditor(false)
-          }}
-        />
+        <Suspense fallback={null}>
+          <PacEditorModal
+            script={values.pacScript || defaultPacScript}
+            onCancel={() => setOpenPacEditor(false)}
+            onConfirm={(script: string) => {
+              setValues({ ...values, pacScript: script })
+              setOpenPacEditor(false)
+            }}
+          />
+        </Suspense>
       )}
       <SettingCard className="sysproxy-settings">
         <SettingItem title={t('sysproxy.host.title')} divider>

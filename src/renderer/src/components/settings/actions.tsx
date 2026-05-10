@@ -7,15 +7,16 @@ import {
   quitWithoutCore,
   resetAppConfig
 } from '@renderer/utils/ipc'
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { version } from '@renderer/utils/init'
 import { IoIosHelpCircle } from 'react-icons/io'
 import { getDriver } from '@renderer/App'
 import { useTranslation } from 'react-i18next'
-import UpdaterModal from '../updater/updater-modal'
 import SettingItem from '../base/base-setting-item'
 import SettingCard from '../base/base-setting-card'
 import BaseConfirmModal from '../base/base-confirm-modal'
+
+const UpdaterModal = lazy(() => import('../updater/updater-modal'))
 
 const Actions: React.FC = () => {
   const { t } = useTranslation()
@@ -28,11 +29,13 @@ const Actions: React.FC = () => {
   return (
     <>
       {openUpdate && (
-        <UpdaterModal
-          onClose={() => setOpenUpdate(false)}
-          version={newVersion}
-          changelog={changelog}
-        />
+        <Suspense fallback={null}>
+          <UpdaterModal
+            onClose={() => setOpenUpdate(false)}
+            version={newVersion}
+            changelog={changelog}
+          />
+        </Suspense>
       )}
       {showResetConfirm && (
         <BaseConfirmModal

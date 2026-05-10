@@ -7,15 +7,16 @@ import { IoMdRefresh } from 'react-icons/io'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import 'dayjs/locale/zh-cn'
 import dayjs from '@renderer/utils/dayjs'
-import React, { useState } from 'react'
+import React, { lazy, Suspense, useState } from 'react'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { TiFolder } from 'react-icons/ti'
 import { useTranslation } from 'react-i18next'
-import ConfigViewer from './config-viewer'
 import { handleSiderCardPointerDown, handleSiderCardPress, siderCardClass } from './sider-card'
 
 dayjs.extend(relativeTime)
 dayjs.locale('zh-cn')
+
+const ConfigViewer = lazy(() => import('./config-viewer'))
 
 interface Props {
   iconOnly?: boolean
@@ -66,7 +67,11 @@ const ProfileCard: React.FC<Props> = (props) => {
 
   return (
     <div className="col-span-2 profile-card">
-      {showRuntimeConfig && <ConfigViewer onClose={() => setShowRuntimeConfig(false)} />}
+      {showRuntimeConfig && (
+        <Suspense fallback={null}>
+          <ConfigViewer onClose={() => setShowRuntimeConfig(false)} />
+        </Suspense>
+      )}
       <Card
         as="div"
         fullWidth

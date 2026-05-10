@@ -1,5 +1,5 @@
 import { useTheme } from 'next-themes'
-import { useCallback, useEffect, useRef } from 'react'
+import { Suspense, useCallback, useEffect, useRef } from 'react'
 import { NavigateFunction, useLocation, useNavigate, useRoutes } from 'react-router-dom'
 import OutboundModeSwitcher from '@renderer/components/sider/outbound-mode-switcher'
 import SysproxySwitcher from '@renderer/components/sider/sysproxy-switcher'
@@ -128,7 +128,11 @@ const App: React.FC = () => {
         style={{ width: `calc(100% - ${SIDER_WIDTH + 1}px)` }}
         className="main grow h-full overflow-y-auto"
       >
-        {page}
+        <Suspense
+          fallback={<div className="h-full w-full animate-pulse bg-content1" aria-busy="true" />}
+        >
+          {page}
+        </Suspense>
       </div>
     </div>
   )

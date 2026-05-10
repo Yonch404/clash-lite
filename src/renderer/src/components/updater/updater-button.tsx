@@ -1,12 +1,13 @@
 import { Button } from '@heroui/react'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { checkUpdate } from '@renderer/utils/ipc'
-import React, { useState } from 'react'
+import React, { lazy, Suspense, useState } from 'react'
 import useSWR from 'swr'
 import { platform } from '@renderer/utils/init'
 import { MdNewReleases } from 'react-icons/md'
 import { useTranslation } from 'react-i18next'
-import UpdaterModal from './updater-modal'
+
+const UpdaterModal = lazy(() => import('./updater-modal'))
 
 interface Props {
   iconOnly?: boolean
@@ -30,13 +31,15 @@ const UpdaterButton: React.FC<Props> = (props) => {
   return (
     <>
       {openModal && (
-        <UpdaterModal
-          version={latest.version}
-          changelog={latest.changelog}
-          onClose={() => {
-            setOpenModal(false)
-          }}
-        />
+        <Suspense fallback={null}>
+          <UpdaterModal
+            version={latest.version}
+            changelog={latest.changelog}
+            onClose={() => {
+              setOpenModal(false)
+            }}
+          />
+        </Suspense>
       )}
       {iconOnly ? (
         <Button

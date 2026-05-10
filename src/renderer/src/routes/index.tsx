@@ -1,13 +1,16 @@
+import { lazy } from 'react'
 import { Navigate } from 'react-router-dom'
-import NetworkPage from '@renderer/pages/network'
-import Proxies from '@renderer/pages/proxies'
-import Settings from '@renderer/pages/settings'
-import Profiles from '@renderer/pages/profiles'
-import Logs from '@renderer/pages/logs'
-import Connections from '@renderer/pages/connections'
-import Mihomo from '@renderer/pages/mihomo'
-import Sysproxy from '@renderer/pages/sysproxy'
-import Tun from '@renderer/pages/tun'
+
+const NetworkPage = lazy(() => import('@renderer/pages/network'))
+const Proxies = lazy(() => import('@renderer/pages/proxies'))
+const Settings = lazy(() => import('@renderer/pages/settings'))
+const Profiles = lazy(() => import('@renderer/pages/profiles'))
+const Logs = lazy(() => import('@renderer/pages/logs'))
+const Connections = lazy(() => import('@renderer/pages/connections'))
+const Mihomo = lazy(() => import('@renderer/pages/mihomo'))
+const Sysproxy = lazy(() => import('@renderer/pages/sysproxy'))
+const Tun = lazy(() => import('@renderer/pages/tun'))
+
 const routes = [
   {
     path: '/network',

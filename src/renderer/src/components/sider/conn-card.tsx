@@ -2,25 +2,13 @@ import { Button, Card, CardBody, CardFooter, Tooltip } from '@heroui/react'
 import { FaCircleArrowDown, FaCircleArrowUp } from 'react-icons/fa6'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { calcTraffic } from '@renderer/utils/calc'
-import React, { useEffect, useState, useMemo, useCallback } from 'react'
+import React, { lazy, Suspense, useEffect, useState, useCallback } from 'react'
 import { IoLink } from 'react-icons/io5'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
-import { Line } from 'react-chartjs-2'
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Filler,
-  ChartOptions,
-  ScriptableContext
-} from 'chart.js'
 import { useTranslation } from 'react-i18next'
 import { handleSiderCardPointerDown, handleSiderCardPress, siderCardClass } from './sider-card'
 
-// 注册 Chart.js 组件
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler)
+const ConnCardChart = lazy(() => import('./conn-card-chart'))
 
 interface Props {
   iconOnly?: boolean
@@ -40,69 +28,6 @@ const ConnCard: React.FC<Props> = (props) => {
   const [upload, setUpload] = useState(0)
   const [download, setDownload] = useState(0)
   const [series, setSeries] = useState(Array(10).fill(0))
-
-  // Chart.js 配置
-  const chartData = useMemo(() => {
-    return {
-      labels: Array(10).fill(''),
-      datasets: [
-        {
-          data: series,
-          fill: true,
-          backgroundColor: (context: ScriptableContext<'line'>) => {
-            const chart = context.chart
-            const { ctx, chartArea } = chart
-            if (!chartArea) {
-              return 'transparent'
-            }
-
-            const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom)
-
-            // 颜色处理
-            const isMatch = location.pathname.includes('/connections')
-            const baseColor = isMatch ? '6, 182, 212' : '161, 161, 170' // primary vs foreground 的近似 RGB 值
-
-            gradient.addColorStop(0, `rgba(${baseColor}, 0.8)`)
-            gradient.addColorStop(1, `rgba(${baseColor}, 0)`)
-            return gradient
-          },
-          borderColor: 'transparent',
-          pointRadius: 0,
-          pointHoverRadius: 0,
-          tension: 0.4
-        }
-      ]
-    }
-  }, [series, location.pathname])
-
-  const chartOptions: ChartOptions<'line'> = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: false
-      }
-    },
-    scales: {
-      x: {
-        display: false
-      },
-      y: {
-        display: false
-      }
-    },
-    elements: {
-      line: {
-        borderWidth: 0
-      }
-    },
-    interaction: {
-      intersect: false
-    },
-    animation: {
-      duration: 0
-    }
-  }
 
   // 使用 useCallback 创建稳定的 handler 引用，通过 ref 读取 showTraffic 避免重建
   const handleTraffic = useCallback((_e: unknown, ...args: unknown[]) => {
@@ -154,7 +79,9 @@ const ConnCard: React.FC<Props> = (props) => {
         className={siderCardClass(match, disableAnimations)}
       >
         <div className="w-full h-full absolute top-0 left-0 pointer-events-none overflow-hidden rounded-[14px]">
-          <Line data={chartData} options={chartOptions} />
+          <Suspense fallback={null}>
+            <ConnCardChart series={series} selected={match} />
+          </Suspense>
         </div>
         <CardBody className="pb-1 pt-0 px-0">
           <div className="flex justify-between">
