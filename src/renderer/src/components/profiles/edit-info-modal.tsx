@@ -132,9 +132,9 @@ const EditInfoModal: React.FC<Props> = (props) => {
                           inputWidth,
                           // 不合法
                           typeof values.interval === 'string' &&
-                          !/^\d+$/.test(values.interval) &&
-                          !isValidCron(values.interval, { seconds: false }) &&
-                          'border-red-500'
+                            !/^\d+$/.test(values.interval) &&
+                            !isValidCron(values.interval, { seconds: false }) &&
+                            'border-red-500'
                         )}
                         value={values.interval?.toString() ?? ''}
                         onValueChange={(v) => {
@@ -162,8 +162,8 @@ const EditInfoModal: React.FC<Props> = (props) => {
                         style={{
                           color:
                             typeof values.interval === 'string' &&
-                              !/^\d+$/.test(values.interval) &&
-                              !isValidCron(values.interval, { seconds: false })
+                            !/^\d+$/.test(values.interval) &&
+                            !isValidCron(values.interval, { seconds: false })
                               ? '#ef4444'
                               : '#6b7280'
                         }}

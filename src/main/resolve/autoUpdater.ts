@@ -17,8 +17,7 @@ import * as chromeRequest from '../utils/chromeRequest'
 
 export async function checkUpdate(): Promise<IAppVersion | undefined> {
   const { 'mixed-port': mixedPort = 7890 } = await getControledMihomoConfig()
-  const githubUrl =
-    'https://github.com/Yonch404/clash-lite/releases/latest/download/latest.yml'
+  const githubUrl = 'https://github.com/Yonch404/clash-lite/releases/latest/download/latest.yml'
   const res = await chromeRequest.get(githubUrl, {
     headers: { 'Content-Type': 'application/octet-stream' },
     proxy: { protocol: 'http', host: '127.0.0.1', port: mixedPort },

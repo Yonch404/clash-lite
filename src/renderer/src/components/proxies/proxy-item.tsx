@@ -69,12 +69,13 @@ const ProxyItemBase: React.FC<Props> = (props) => {
       isPressable
       fullWidth
       shadow="sm"
-      className={`${fixed
-        ? 'bg-secondary/30 border-r-2 border-r-secondary border-l-2 border-l-secondary'
-        : selected
-          ? 'bg-primary/30 border-r-2 border-r-primary border-l-2 border-l-primary'
-          : 'bg-content2'
-        }`}
+      className={`${
+        fixed
+          ? 'bg-secondary/30 border-r-2 border-r-secondary border-l-2 border-l-secondary'
+          : selected
+            ? 'bg-primary/30 border-r-2 border-r-primary border-l-2 border-l-primary'
+            : 'bg-content2'
+      }`}
       radius="sm"
     >
       <CardBody className="p-1">

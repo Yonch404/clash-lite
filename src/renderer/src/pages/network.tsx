@@ -563,12 +563,13 @@ const IPPage: React.FC = () => {
             <div className="flex items-center gap-2">
               {averageLatency !== null && (
                 <span
-                  className={`rounded-md px-2 py-1 text-xs font-semibold ${averageLatency < 100
-                    ? 'bg-success/15 text-success'
-                    : averageLatency < 300
-                      ? 'bg-warning/15 text-warning'
-                      : 'bg-danger/15 text-danger'
-                    }`}
+                  className={`rounded-md px-2 py-1 text-xs font-semibold ${
+                    averageLatency < 100
+                      ? 'bg-success/15 text-success'
+                      : averageLatency < 300
+                        ? 'bg-warning/15 text-warning'
+                        : 'bg-danger/15 text-danger'
+                  }`}
                 >
                   {t('network.latency.average')}: {averageLatency}ms
                 </span>

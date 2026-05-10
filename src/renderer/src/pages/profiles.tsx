@@ -1,7 +1,6 @@
 import {
   Button,
   Checkbox,
-  Chip,
   Divider,
   Dropdown,
   DropdownItem,

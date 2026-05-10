@@ -169,9 +169,7 @@ const ConnCard: React.FC<Props> = (props) => {
                 className={`${match ? 'text-primary-foreground' : 'text-foreground'} text-[24px]`}
               />
             </Button>
-            <div
-              className={`p-2 w-full ${match ? 'text-primary-foreground' : 'text-foreground'} `}
-            >
+            <div className={`p-2 w-full ${match ? 'text-primary-foreground' : 'text-foreground'} `}>
               <div className="flex justify-between">
                 <div className="w-full text-right mr-2">{calcTraffic(upload)}/s</div>
                 <FaCircleArrowUp className="h-[24px] leading-[24px]" />

@@ -12,11 +12,7 @@ const QrCodeModal: React.FC<Props> = (props) => {
   const { t } = useTranslation()
 
   return (
-    <Modal
-      isOpen
-      onOpenChange={(open) => !open && props.onClose()}
-      size="xs"
-    >
+    <Modal isOpen onOpenChange={(open) => !open && props.onClose()} size="xs">
       <ModalContent>
         <ModalHeader>{t('profiles.qrCode.title')}</ModalHeader>
         <ModalBody className="flex items-center pb-6">

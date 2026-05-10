@@ -12,12 +12,7 @@ import { mihomoHotReloadConfig } from '../core/mihomoApi'
 import { restartCore } from '../core/manager'
 import { generateProfile } from '../core/factory'
 import { addProfileUpdater, removeProfileUpdater } from '../core/profileUpdater'
-import {
-  mihomoProfileWorkDir,
-  mihomoWorkDir,
-  profileConfigPath,
-  profilePath
-} from '../utils/dirs'
+import { mihomoProfileWorkDir, mihomoWorkDir, profileConfigPath, profilePath } from '../utils/dirs'
 import { createLogger } from '../utils/logger'
 import { getAppConfig } from './app'
 import { getControledMihomoConfig } from './controledMihomo'
@@ -460,4 +455,3 @@ function parseSubinfo(str: string): ISubscriptionUserInfo {
   })
   return obj
 }
-

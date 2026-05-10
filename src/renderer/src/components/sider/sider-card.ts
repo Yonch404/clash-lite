@@ -37,10 +37,7 @@ export const siderCardClass = (match: boolean, disableAnimations = false): strin
   return `sider-card-interactive shadow-sm ${state} ${animation} !cursor-default !scale-100 data-[pressed=true]:!scale-100 active:!scale-100 tap-highlight-transparent`
 }
 
-export const handleSiderCardPress = (
-  event: PressEvent,
-  onPress: () => void
-): void => {
+export const handleSiderCardPress = (event: PressEvent, onPress: () => void): void => {
   if (isInteractiveTarget(event.target)) return
 
   const card = getSiderCard(event.target)

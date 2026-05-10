@@ -25,10 +25,7 @@ const ProfileCard: React.FC<Props> = (props) => {
   const { t } = useTranslation()
   const { appConfig, patchAppConfig } = useAppConfig()
   const { iconOnly } = props
-  const {
-    profileDisplayDate = 'expire',
-    disableAnimations = false
-  } = appConfig || {}
+  const { profileDisplayDate = 'expire', disableAnimations = false } = appConfig || {}
   const location = useLocation()
   const navigate = useNavigate()
   const match = location.pathname.includes('/profiles')

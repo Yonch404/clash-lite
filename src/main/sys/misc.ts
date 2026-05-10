@@ -4,13 +4,7 @@ import path from 'path'
 import { promisify } from 'util'
 import { app, dialog, nativeTheme, shell } from 'electron'
 import i18next from 'i18next'
-import {
-  dataDir,
-  exePath,
-  mihomoCorePath,
-  profilePath,
-  resourcesDir
-} from '../utils/dirs'
+import { dataDir, exePath, mihomoCorePath, profilePath, resourcesDir } from '../utils/dirs'
 import { checkAdminPrivileges } from '../core/admin'
 
 export function getFilePath(

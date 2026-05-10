@@ -130,13 +130,7 @@ const Proxies: React.FC = () => {
       }
     })
     return { groupCounts, allProxies }
-  }, [
-    groups,
-    isOpen,
-    cols,
-    searchValue,
-    sortProxies
-  ])
+  }, [groups, isOpen, cols, searchValue, sortProxies])
 
   const onChangeProxy = useCallback(
     async (group: string, proxy: string): Promise<void> => {
@@ -236,7 +230,7 @@ const Proxies: React.FC = () => {
             localStorage.setItem(groups[index].icon, dataURL)
             mutate()
           })
-          .catch(() => { })
+          .catch(() => {})
       }
       return groups[index] ? (
         <div
@@ -327,7 +321,7 @@ const Proxies: React.FC = () => {
                       }
                       i += Math.floor(
                         allProxies[index].findIndex((proxy) => proxy.name === groups[index].now) /
-                        cols
+                          cols
                       )
                       virtuosoRef.current?.scrollToIndex({
                         index: Math.floor(i),

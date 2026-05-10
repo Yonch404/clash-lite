@@ -1,17 +1,8 @@
 import { copyFile, mkdir, writeFile, stat } from 'fs/promises'
 import { existsSync } from 'fs'
 import path from 'path'
-import {
-  getControledMihomoConfig,
-  getProfileConfig,
-  getProfile,
-  getAppConfig
-} from '../config'
-import {
-  mihomoProfileWorkDir,
-  mihomoWorkConfigPath,
-  mihomoWorkDir
-} from '../utils/dirs'
+import { getControledMihomoConfig, getProfileConfig, getProfile, getAppConfig } from '../config'
+import { mihomoProfileWorkDir, mihomoWorkConfigPath, mihomoWorkDir } from '../utils/dirs'
 import { stringify } from '../utils/yaml'
 import { deepMerge } from '../utils/merge'
 
@@ -119,7 +110,6 @@ async function prepareProfileWorkDir(current: string | undefined): Promise<void>
     copy('ASN.mmdb')
   ])
 }
-
 
 export async function getRuntimeConfigStr(): Promise<string> {
   return runtimeConfigStr

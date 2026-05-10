@@ -103,14 +103,14 @@ const ProfileItem: React.FC<Props> = (props) => {
       } as MenuItem,
       ...(info.type === 'remote' && info.url
         ? [
-          {
-            key: 'show-qrcode',
-            label: t('profiles.qrCode.show'),
-            showDivider: true,
-            color: 'default',
-            className: ''
-          } as MenuItem
-        ]
+            {
+              key: 'show-qrcode',
+              label: t('profiles.qrCode.show'),
+              showDivider: true,
+              color: 'default',
+              className: ''
+            } as MenuItem
+          ]
         : []),
       {
         key: 'delete',
@@ -297,10 +297,7 @@ const ProfileItem: React.FC<Props> = (props) => {
                   </Tooltip>
                 )}
 
-                <Dropdown
-                  isOpen={dropdownOpen}
-                  onOpenChange={setDropdownOpen}
-                >
+                <Dropdown isOpen={dropdownOpen} onOpenChange={setDropdownOpen}>
                   <DropdownTrigger>
                     <Button isIconOnly size="sm" variant="light" color="default">
                       <IoMdMore

@@ -508,7 +508,7 @@ const tasks = [
     func: resolve7zip,
     retry: 5,
     winOnly: true
-  },
+  }
 ]
 
 async function runTask() {

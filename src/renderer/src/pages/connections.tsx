@@ -137,9 +137,9 @@ const Connections: React.FC = () => {
       filter === ''
         ? connections
         : connections.filter((connection) => {
-          const raw = JSON.stringify(connection)
-          return includesIgnoreCase(raw, filter)
-        })
+            const raw = JSON.stringify(connection)
+            return includesIgnoreCase(raw, filter)
+          })
 
     if (viewMode === 'list' && connectionOrderBy) {
       return [...filtered].sort((a, b) => {

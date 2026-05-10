@@ -44,7 +44,7 @@ export const buildContextMenu = async (): Promise<Menu> => {
     envType = process.platform === 'win32' ? ['powershell'] : ['bash'],
     proxyInTray = true,
     showCurrentProxyInTray = false,
-    trayProxyGroupStyle = 'default',
+    trayProxyGroupStyle = 'default'
   } = await getAppConfig()
   let groupsMenu: Electron.MenuItemConstructorOptions[] = []
   if (proxyInTray && process.platform !== 'linux') {

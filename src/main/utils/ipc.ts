@@ -54,17 +54,9 @@ import {
   setupFirewall
 } from '../sys/misc'
 import { getRuntimeConfig, getRuntimeConfigStr } from '../core/factory'
-import {
-  exportLocalBackup,
-  importLocalBackup
-} from '../resolve/backup'
+import { exportLocalBackup, importLocalBackup } from '../resolve/backup'
 import { getInterfaces } from '../sys/interface'
-import {
-  closeTrayIcon,
-  copyEnv,
-  showTrayIcon,
-  updateTrayIcon
-} from '../resolve/tray'
+import { closeTrayIcon, copyEnv, showTrayIcon, updateTrayIcon } from '../resolve/tray'
 import { closeMainWindow, mainWindow, showMainWindow, triggerMainWindow } from '../window'
 import { applyTheme } from '../resolve/theme'
 import { startMonitor } from '../resolve/trafficMonitor'

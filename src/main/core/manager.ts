@@ -7,10 +7,7 @@ import { existsSync } from 'fs'
 import chokidar, { FSWatcher } from 'chokidar'
 import { app, ipcMain } from 'electron'
 import { mainWindow } from '../window'
-import {
-  getAppConfig,
-  getControledMihomoConfig
-} from '../config'
+import { getAppConfig, getControledMihomoConfig } from '../config'
 import {
   dataDir,
   coreLogPath,
@@ -58,7 +55,7 @@ export {
   checkAdminPrivileges,
   checkHighPrivilegeCore,
   restartAsAdmin,
-  showErrorDialog,
+  showErrorDialog
 } from './permissions'
 
 export { getDefaultDevice } from './dns'
@@ -145,10 +142,7 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
 
   const [appConfig, mihomoConfig] = await Promise.all([getAppConfig(), getControledMihomoConfig()])
 
-  const {
-    diffWorkDir = false,
-    mihomoCpuPriority = 'PRIORITY_NORMAL'
-  } = appConfig
+  const { diffWorkDir = false, mihomoCpuPriority = 'PRIORITY_NORMAL' } = appConfig
   const core = 'mihomo'
 
   const { 'log-level': logLevel = 'info' as LogLevel, tun } = mihomoConfig

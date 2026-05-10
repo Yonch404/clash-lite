@@ -129,4 +129,3 @@ export function coreLogPath(): string {
   const name = `core-${year}-${month}-${day}`
   return path.join(logDir(), `${name}.log`)
 }
-
