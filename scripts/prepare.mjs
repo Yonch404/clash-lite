@@ -16,7 +16,7 @@ if (process.argv.slice(2).length !== 0) {
 const MIHOMO_RELEASE_API = 'https://api.github.com/repos/Yonch404/mihomo/releases/latest'
 let MIHOMO_RELEASE
 const CHROME_CERTIFICATE_URL =
-  'https://raw.githubusercontent.com/SagerNet/sing-box/refs/heads/testing/common/certificate/chrome.pem'
+  'https://raw.githubusercontent.com/SagerNet/sing-box/testing/common/certificate/chrome.pem'
 
 const MIHOMO_MAP = {
   'win32-x64': 'mihomo-singbox-windows-amd64-v3',
