@@ -9,7 +9,6 @@ import { createLogger } from '../utils/logger'
 import { mihomoWorkConfigPath } from '../utils/dirs'
 import { generateProfile, getRuntimeConfig } from './factory'
 import { getMihomoIpcPath } from './manager'
-import { syncSingBoxCore } from './singBox'
 
 const mihomoApiLogger = createLogger('MihomoApi')
 
@@ -167,7 +166,6 @@ export const mihomoUpgrade = async (): Promise<void> => {
 export const mihomoHotReloadConfig = async (): Promise<void> => {
   mihomoApiLogger.info('mihomoHotReloadConfig called')
   const current = await generateProfile()
-  await syncSingBoxCore()
   const { diffWorkDir = false } = await getAppConfig()
   const configPath = diffWorkDir ? mihomoWorkConfigPath(current) : mihomoWorkConfigPath('work')
   mihomoApiLogger.info(`hot reload config path: ${configPath}`)

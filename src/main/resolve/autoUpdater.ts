@@ -54,16 +54,14 @@ export async function downloadAndInstallUpdate(version: string): Promise<void> {
   const githubBase = `https://github.com/Yonch404/clash-lite/releases/download/v${version}/`
   const fileMap = {
     'win32-x64': `clash-lite-windows-${version}-x64-setup.exe`,
-    'win32-arm64': `clash-lite-windows-${version}-arm64-setup.exe`,
-    'darwin-x64': `clash-lite-macos-${version}-x64.dmg`,
-    'darwin-arm64': `clash-lite-macos-${version}-arm64.dmg`
+    'win32-arm64': `clash-lite-windows-${version}-arm64-setup.exe`
   }
   let file = fileMap[`${process.platform}-${process.arch}`]
-  if (isPortable()) {
-    file = file.replace('-setup.exe', '-portable.7z')
-  }
   if (!file) {
     throw new Error(i18next.t('common.error.autoUpdateNotSupported'))
+  }
+  if (isPortable()) {
+    file = file.replace('-setup.exe', '-portable.7z')
   }
   const proxy = { protocol: 'http' as const, host: '127.0.0.1', port: mixedPort }
   try {
@@ -152,9 +150,6 @@ export async function downloadAndInstallUpdate(version: string): Promise<void> {
         }
       ).unref()
       app.quit()
-    }
-    if (file.endsWith('.dmg') || file.endsWith('.zip')) {
-      await shell.openPath(path.join(dataDir(), file))
     }
   } catch (e) {
     rm(path.join(dataDir(), file))

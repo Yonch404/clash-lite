@@ -161,8 +161,6 @@
   "mihomo.coreAuthLost": "內核權限丟失",
   "mihomo.coreUpgradeSuccess": "內核升級成功。若虛擬網卡無法啟動，請重新安裝 Deb/RPM 包或手動為內核檔案授予 TUN 權限",
   "mihomo.alreadyLatestVersion": "已經是最新版本",
-  "singBox.upgradeCore": "更新 sing-box",
-  "singBox.coreUpgradeSuccess": "sing-box 更新成功",
   "mihomo.selectCoreVersion": "選擇內核版本",
   "mihomo.stableVersion": "穩定版",
   "mihomo.alphaVersion": "預覽版",

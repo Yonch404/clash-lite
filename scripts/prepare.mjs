@@ -2,7 +2,6 @@ import fs from 'fs'
 import AdmZip from 'adm-zip'
 import path from 'path'
 import zlib from 'zlib'
-import { extract } from 'tar'
 import { execSync } from 'child_process'
 
 const cwd = process.cwd()
@@ -14,23 +13,16 @@ if (process.argv.slice(2).length !== 0) {
 }
 
 /* ======= mihomo release ======= */
-const MIHOMO_VERSION_URL =
-  'https://github.com/MetaCubeX/mihomo/releases/latest/download/version.txt'
-const MIHOMO_URL_PREFIX = `https://github.com/MetaCubeX/mihomo/releases/download`
+const MIHOMO_VERSION_URL = 'https://github.com/Yonch404/mihomo/releases/latest/download/version.txt'
+const MIHOMO_URL_PREFIX = `https://github.com/Yonch404/mihomo/releases/download`
 let MIHOMO_VERSION
 
 const MIHOMO_MAP = {
-  'win32-x64': 'mihomo-windows-amd64',
-  'win32-arm64': 'mihomo-windows-arm64',
-  'darwin-x64': 'mihomo-darwin-amd64',
-  'darwin-arm64': 'mihomo-darwin-arm64',
-  'linux-x64': 'mihomo-linux-amd64',
-  'linux-arm64': 'mihomo-linux-arm64'
+  'win32-x64': 'mihomo-singbox-windows-amd64-v3',
+  'win32-arm64': 'mihomo-singbox-windows-arm64',
+  'linux-x64': 'mihomo-singbox-linux-amd64-v3',
+  'linux-arm64': 'mihomo-singbox-linux-arm64'
 }
-
-/* ======= sing-box release ======= */
-const SING_BOX_VERSION = '1.13.11'
-const SING_BOX_URL_PREFIX = `https://github.com/SagerNet/sing-box/releases/download/v${SING_BOX_VERSION}`
 
 // Fetch the latest release version from the version.txt file
 async function getLatestReleaseVersion() {
@@ -74,6 +66,20 @@ function mihomo() {
   }
 }
 
+function findExtractedFile(dir, predicate) {
+  const entries = fs.readdirSync(dir, { withFileTypes: true })
+  for (const entry of entries) {
+    const entryPath = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      const found = findExtractedFile(entryPath, predicate)
+      if (found) return found
+    } else if (entry.isFile() && predicate(entry.name, entryPath)) {
+      return entryPath
+    }
+  }
+  return undefined
+}
+
 /**
  * download sidecar and rename
  */
@@ -103,27 +109,14 @@ async function resolveSidecar(binInfo) {
         console.log(`[DEBUG]: "${name}" entry name`, entry.entryName)
       })
       zip.extractAllTo(tempDir, true)
-      fs.renameSync(tempExe, sidecarPath)
-      console.log(`[INFO]: "${name}" unzip finished`)
-    } else if (zipFile.endsWith('.tgz')) {
-      // tgz
-      fs.mkdirSync(tempDir, { recursive: true })
-      await extract({
-        cwd: tempDir,
-        file: tempZip
-      })
-      const files = fs.readdirSync(tempDir)
-      console.log(`[DEBUG]: "${name}" files in tempDir:`, files)
-      const extractedFile = files.find((file) => file.startsWith('虚空终端-'))
-      if (extractedFile) {
-        const extractedFilePath = path.join(tempDir, extractedFile)
-        fs.renameSync(extractedFilePath, sidecarPath)
-        console.log(`[INFO]: "${name}" file renamed to "${sidecarPath}"`)
-        execSync(`chmod 755 ${sidecarPath}`)
-        console.log(`[INFO]: "${name}" chmod binary finished`)
-      } else {
-        throw new Error(`Expected file not found in ${tempDir}`)
+      const extractedExe = fs.existsSync(tempExe)
+        ? tempExe
+        : findExtractedFile(tempDir, (file) => file.toLowerCase().endsWith('.exe'))
+      if (!extractedExe) {
+        throw new Error(`Expected executable file not found in ${tempDir}`)
       }
+      fs.renameSync(extractedExe, sidecarPath)
+      console.log(`[INFO]: "${name}" unzip finished`)
     } else {
       // gz
       const readStream = fs.createReadStream(tempZip)
@@ -171,36 +164,6 @@ async function resolveResource(binInfo) {
   await downloadFile(downloadURL, targetPath)
 
   console.log(`[INFO]: ${file} finished`)
-}
-
-function copyExtractedFiles(sourceDir, targetDir) {
-  const entries = fs.readdirSync(sourceDir, { withFileTypes: true })
-  for (const entry of entries) {
-    const sourcePath = path.join(sourceDir, entry.name)
-    if (entry.isDirectory()) {
-      copyExtractedFiles(sourcePath, targetDir)
-      continue
-    }
-    if (!entry.isFile()) continue
-
-    const targetPath = path.join(targetDir, entry.name)
-    fs.copyFileSync(sourcePath, targetPath)
-    if (entry.name === 'sing-box' || entry.name === 'sing-box.exe') {
-      fs.chmodSync(targetPath, 0o755)
-    }
-  }
-}
-
-function cleanupSingBoxArtifacts(sidecarDir) {
-  if (!fs.existsSync(sidecarDir)) return
-
-  const entries = fs.readdirSync(sidecarDir, { withFileTypes: true })
-  for (const entry of entries) {
-    if (!entry.name.startsWith('sing-box') && !entry.name.startsWith('libcronet')) {
-      continue
-    }
-    fs.rmSync(path.join(sidecarDir, entry.name), { recursive: true, force: true })
-  }
 }
 
 /**
@@ -335,68 +298,6 @@ const resolve7zip = () =>
     file: '7za.exe',
     downloadURL: `https://github.com/develar/7zip-bin/raw/master/win/${arch}/7za.exe`
   })
-function getSingBoxAssetName() {
-  const platformArch = `${platform}-${arch}`
-  switch (platformArch) {
-    case 'win32-x64':
-      return `sing-box-${SING_BOX_VERSION}-windows-amd64.zip`
-    case 'win32-arm64':
-      return `sing-box-${SING_BOX_VERSION}-windows-arm64.zip`
-    case 'darwin-x64':
-      return `sing-box-${SING_BOX_VERSION}-darwin-amd64.tar.gz`
-    case 'darwin-arm64':
-      return `sing-box-${SING_BOX_VERSION}-darwin-arm64.tar.gz`
-    case 'linux-x64':
-      return `sing-box-${SING_BOX_VERSION}-linux-amd64.tar.gz`
-    case 'linux-arm64':
-      return `sing-box-${SING_BOX_VERSION}-linux-arm64.tar.gz`
-    default:
-      throw new Error(`Unsupported platform for sing-box: ${platformArch}`)
-  }
-}
-
-const resolveSingBox = async () => {
-  const assetName = getSingBoxAssetName()
-  const downloadURL = `${SING_BOX_URL_PREFIX}/${assetName}`
-  const tempDir = path.join(TEMP_DIR, 'sing-box')
-  const tempArchive = path.join(tempDir, assetName)
-  const extractedDir = path.join(tempDir, 'extract')
-  const sidecarDir = path.join(cwd, 'extra', 'sidecar')
-
-  if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir, { recursive: true })
-  }
-  if (!fs.existsSync(sidecarDir)) {
-    fs.mkdirSync(sidecarDir, { recursive: true })
-  }
-
-  if (fs.existsSync(tempArchive)) {
-    fs.rmSync(tempArchive)
-  }
-
-  cleanupSingBoxArtifacts(sidecarDir)
-
-  try {
-    await downloadFile(downloadURL, tempArchive)
-    fs.mkdirSync(extractedDir, { recursive: true })
-
-    if (assetName.endsWith('.zip')) {
-      const zip = new AdmZip(tempArchive)
-      zip.extractAllTo(extractedDir, true)
-    } else {
-      await extract({
-        cwd: extractedDir,
-        file: tempArchive
-      })
-    }
-
-    copyExtractedFiles(extractedDir, sidecarDir)
-  } finally {
-    fs.rmSync(tempDir, { recursive: true, force: true })
-  }
-
-  console.log(`[INFO]: sing-box finished`)
-}
 const resolveFont = async () => {
   const targetPath = path.join(cwd, 'src', 'renderer', 'src', 'assets', 'NotoColorEmoji.ttf')
 
@@ -454,11 +355,6 @@ const tasks = [
   {
     name: 'mihomo',
     func: () => getLatestReleaseVersion().then(() => resolveSidecar(mihomo())),
-    retry: 5
-  },
-  {
-    name: 'sing-box',
-    func: resolveSingBox,
     retry: 5
   },
   { name: 'mmdb', func: resolveMmdb, retry: 5 },

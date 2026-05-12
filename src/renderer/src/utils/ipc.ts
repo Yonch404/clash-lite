@@ -26,8 +26,6 @@ interface IpcApi {
   mihomoUpgrade: () => Promise<void>
   mihomoProxyDelay: (proxy: string, url?: string) => Promise<IMihomoDelay>
   mihomoGroupDelay: (group: string, url?: string) => Promise<IMihomoGroupDelay>
-  singBoxVersion: () => Promise<ISingBoxVersion>
-  singBoxUpgrade: () => Promise<void>
   patchMihomoConfig: (patch: Partial<IMihomoConfig>) => Promise<void>
   // AutoRun
   checkAutoRun: () => Promise<boolean>
@@ -128,8 +126,6 @@ export const {
   mihomoUpgrade,
   mihomoProxyDelay,
   mihomoGroupDelay,
-  singBoxVersion,
-  singBoxUpgrade,
   patchMihomoConfig,
   // AutoRun
   checkAutoRun,

@@ -3,13 +3,7 @@ import BasePage from '@renderer/components/base/base-page'
 import SettingCard from '@renderer/components/base/base-setting-card'
 import SettingItem from '@renderer/components/base/base-setting-item'
 import { toast } from '@renderer/components/base/toast'
-import {
-  mihomoUpgrade,
-  mihomoVersion,
-  restartCore,
-  singBoxUpgrade,
-  singBoxVersion
-} from '@renderer/utils/ipc'
+import { mihomoUpgrade, mihomoVersion, restartCore } from '@renderer/utils/ipc'
 import { platform } from '@renderer/utils/init'
 import PubSub from 'pubsub-js'
 import React, { useState } from 'react'
@@ -20,20 +14,15 @@ import useSWR from 'swr'
 const Mihomo: React.FC = () => {
   const { t } = useTranslation()
   const [upgrading, setUpgrading] = useState(false)
-  const [singBoxUpgrading, setSingBoxUpgrading] = useState(false)
   const { data: mihomoCoreVersion, mutate: mutateMihomoCoreVersion } = useSWR(
     'mihomoVersion',
     mihomoVersion
-  )
-  const { data: singBoxCoreVersion, mutate: mutateSingBoxCoreVersion } = useSWR(
-    'singBoxVersion',
-    singBoxVersion
   )
 
   return (
     <BasePage title={t('mihomo.title')}>
       <SettingCard>
-        <SettingItem title="Mihomo" divider>
+        <SettingItem title="Mihomo">
           <div className="flex items-center gap-3">
             <span className="text-foreground-500 text-sm">{mihomoCoreVersion?.version || '-'}</span>
             <Button
@@ -69,41 +58,6 @@ const Mihomo: React.FC = () => {
               }}
             >
               {t('mihomo.upgradeCore')}
-            </Button>
-          </div>
-        </SettingItem>
-        <SettingItem title="sing-box">
-          <div className="flex items-center gap-3">
-            <span className="text-foreground-500 text-sm">
-              {singBoxCoreVersion?.version || '-'}
-            </span>
-            <Button
-              size="sm"
-              color="primary"
-              isLoading={singBoxUpgrading}
-              startContent={!singBoxUpgrading && <IoMdCloudDownload className="text-lg" />}
-              onPress={async () => {
-                try {
-                  setSingBoxUpgrading(true)
-                  await singBoxUpgrade()
-                  await restartCore()
-                  void mutateSingBoxCoreVersion()
-                  setTimeout(() => {
-                    PubSub.publish('mihomo-core-changed')
-                  }, 2000)
-                  new Notification(t('singBox.coreUpgradeSuccess'))
-                } catch (e) {
-                  if (typeof e === 'string' && e.includes('already using latest version')) {
-                    new Notification(t('mihomo.alreadyLatestVersion'))
-                  } else {
-                    toast.error(String(e))
-                  }
-                } finally {
-                  setSingBoxUpgrading(false)
-                }
-              }}
-            >
-              {t('singBox.upgradeCore')}
             </Button>
           </div>
         </SettingItem>

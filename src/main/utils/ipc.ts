@@ -17,7 +17,6 @@ import {
   mihomoVersion,
   patchMihomoConfig
 } from '../core/mihomoApi'
-import { singBoxUpgrade, singBoxVersion } from '../core/singBox'
 import { checkAutoRun, disableAutoRun, enableAutoRun } from '../sys/autoRun'
 import {
   getAppConfig,
@@ -138,8 +137,6 @@ const asyncHandlers: Record<string, AsyncFn> = {
   mihomoUpgrade,
   mihomoProxyDelay,
   mihomoGroupDelay,
-  singBoxVersion,
-  singBoxUpgrade,
   patchMihomoConfig,
   // AutoRun
   checkAutoRun,

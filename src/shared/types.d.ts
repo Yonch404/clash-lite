@@ -65,11 +65,6 @@ interface IMihomoLogInfo {
   type: LogLevel
   payload: string
   time?: string
-  source?: 'mihomo' | 'sing-box'
-}
-
-interface ISingBoxVersion {
-  version: string
 }
 
 interface IMihomoConnectionsInfo {
@@ -392,12 +387,6 @@ interface IMihomoConfig {
   dns: IMihomoDNSConfig
   sniffer: IMihomoSnifferConfig
   profile: IMihomoProfileConfig
-  'clash-lite'?: IClashLiteConfig
-}
-
-interface IClashLiteConfig {
-  'sing-box'?: string | Record<string, unknown>
-  [key: string]: unknown
 }
 
 interface IProfileConfig {

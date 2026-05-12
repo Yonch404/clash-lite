@@ -1,4 +1,5 @@
-# 1.1.0
+# 1.2.0
 
-- 增加 sing-box 内核。
-- 去除遗留的 Sub-Store 打包。
+- 切换为 Clash Lite 专用 Mihomo 内核。
+- 去除独立副核心管理。
+- 去除 macOS 构建产物。

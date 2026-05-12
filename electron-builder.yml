@@ -36,21 +36,6 @@ nsis:
   oneClick: false
   perMachine: true
   createDesktopShortcut: always
-mac:
-  icon: build/app-icon.png
-  target:
-    - dmg
-    - zip
-  identity: null
-  extendInfo:
-    - NSCameraUsageDescription: Application requests access to the device's camera.
-    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
-    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
-    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
-  notarize: false
-  artifactName: clash-lite-macos-${version}-${arch}.${ext}
-dmg:
-  background: build/background.png
 linux:
   executableName: clash-lite
   icon: build/app-icon.png

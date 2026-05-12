@@ -31,7 +31,6 @@ import {
   profilePath,
   profilesDir,
   resourcesFilesDir,
-  singBoxWorkDir,
   themesDir
 } from './dirs'
 import { initLogger } from './logger'
@@ -94,7 +93,6 @@ async function initDirs(): Promise<void> {
     themesDir(),
     profilesDir(),
     mihomoWorkDir(),
-    singBoxWorkDir(),
     logDir(),
     mihomoTestDir()
   ]
@@ -134,7 +132,7 @@ async function killOldMihomoProcesses(): Promise<void> {
 
   try {
     const execFilePromise = promisify(execFile)
-    const coreNames = new Set(['mihomo.exe', 'sing-box.exe'])
+    const coreNames = new Set(['mihomo.exe'])
     const { stdout } = await execFilePromise('tasklist', ['/FO', 'CSV', '/NH'])
 
     const pids = stdout
@@ -153,7 +151,7 @@ async function killOldMihomoProcesses(): Promise<void> {
     for (const pid of pids) {
       try {
         process.kill(pid, 'SIGTERM')
-        await initLogger.info(`Terminated old mihomo process ${pid}`)
+        await initLogger.info(`Terminated old core process ${pid}`)
       } catch {
         // 进程可能退出
       }

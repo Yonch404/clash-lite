@@ -16,8 +16,7 @@ import {
   mihomoProfileWorkDir,
   mihomoTestDir,
   mihomoWorkConfigPath,
-  mihomoWorkDir,
-  singBoxPidPath
+  mihomoWorkDir
 } from '../utils/dirs'
 import { startMonitor } from '../resolve/trafficMonitor'
 import { ensureRuntimeFiles, safeShowErrorBox } from '../utils/init'
@@ -48,7 +47,6 @@ import {
   validateWindowsPipeAccess,
   waitForCoreReady
 } from './process'
-import { stopSingBoxCore, syncSingBoxCore } from './singBox'
 
 // 重新导出权限相关函数
 export {
@@ -160,7 +158,7 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
   }
 
   // 清理旧进程
-  const pidPaths = [path.join(dataDir(), 'core.pid'), singBoxPidPath()]
+  const pidPaths = [path.join(dataDir(), 'core.pid')]
   for (const pidPath of pidPaths) {
     if (existsSync(pidPath)) {
       const pid = parseInt(await readFile(pidPath, 'utf-8'), 10)
@@ -362,38 +360,25 @@ function setupCoreListeners(
 export async function startCore(detached = false, skipStop = false): Promise<Promise<void>[]> {
   const config = await prepareCore(detached, skipStop)
 
-  try {
-    await syncSingBoxCore(detached)
-    const proc = spawnCoreProcess(config)
-    child = proc
+  const proc = spawnCoreProcess(config)
+  child = proc
 
-    if (detached) {
-      managerLogger.info(
-        `Core process detached successfully on ${process.platform}, PID: ${proc.pid}`
-      )
-      proc.unref()
-      return [new Promise(() => {})]
-    }
-
-    const startupPromise = new Promise<Promise<void>[]>((resolve, reject) => {
-      setupCoreListeners(proc, config.logLevel, resolve, reject)
-    })
-
-    return startupPromise.catch(async (error) => {
-      await stopSingBoxCore()
-      throw error
-    })
-  } catch (error) {
-    await stopSingBoxCore()
-    throw error
+  if (detached) {
+    managerLogger.info(
+      `Core process detached successfully on ${process.platform}, PID: ${proc.pid}`
+    )
+    proc.unref()
+    return [new Promise(() => {})]
   }
+
+  return new Promise<Promise<void>[]>((resolve, reject) => {
+    setupCoreListeners(proc, config.logLevel, resolve, reject)
+  })
 }
 
 // 停止核心
 export async function stopCore(force = false): Promise<void> {
   void force
-
-  await stopSingBoxCore()
 
   if (child) {
     child.removeAllListeners()
