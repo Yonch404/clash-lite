@@ -15,6 +15,8 @@ if (process.argv.slice(2).length !== 0) {
 /* ======= mihomo release ======= */
 const MIHOMO_RELEASE_API = 'https://api.github.com/repos/Yonch404/mihomo/releases/latest'
 let MIHOMO_RELEASE
+const CHROME_CERTIFICATE_URL =
+  'https://raw.githubusercontent.com/SagerNet/sing-box/refs/heads/testing/common/certificate/chrome.pem'
 
 const MIHOMO_MAP = {
   'win32-x64': 'mihomo-singbox-windows-amd64-v3',
@@ -187,6 +189,9 @@ async function downloadFile(url, path) {
     method: 'GET',
     headers: { 'Content-Type': 'application/octet-stream' }
   })
+  if (!response.ok) {
+    throw new Error(`download failed "${url}": HTTP ${response.status}`)
+  }
   const buffer = await response.arrayBuffer()
   fs.writeFileSync(path, new Uint8Array(buffer))
 
@@ -223,6 +228,18 @@ const resolveEnableLoopback = () =>
     file: 'enableLoopback.exe',
     downloadURL: `https://github.com/Kuingsmile/uwp-tool/releases/download/latest/enableLoopback.exe`
   })
+const resolveChromeCertificate = async () => {
+  await resolveResource({
+    file: 'chrome.pem',
+    downloadURL: CHROME_CERTIFICATE_URL
+  })
+
+  const targetPath = path.join(cwd, 'extra', 'files', 'chrome.pem')
+  const content = fs.readFileSync(targetPath, 'utf-8')
+  if (!content.includes('-----BEGIN CERTIFICATE-----')) {
+    throw new Error(`invalid chrome.pem downloaded from ${CHROME_CERTIFICATE_URL}`)
+  }
+}
 /* ======= sysproxy-rs ======= */
 const SYSPROXY_RS_VERSION = 'v0.1.0'
 const SYSPROXY_RS_URL_PREFIX = `https://github.com/mihomo-party-org/sysproxy-rs-opti/releases/download/${SYSPROXY_RS_VERSION}`
@@ -375,6 +392,7 @@ const tasks = [
   { name: 'geosite', func: resolveGeosite, retry: 5 },
   { name: 'geoip', func: resolveGeoIP, retry: 5 },
   { name: 'asn', func: resolveASN, retry: 5 },
+  { name: 'chrome-certificate', func: resolveChromeCertificate, retry: 5 },
   {
     name: 'font',
     func: resolveFont,

@@ -3,11 +3,11 @@ import fs, { existsSync } from 'fs'
 import os from 'os'
 import path from 'path'
 import crypto from 'crypto'
-import axios from 'axios'
 import { getIcon } from 'file-icon-info'
 import { app } from 'electron'
 import { getControledMihomoConfig } from '../config'
 import { windowsDefaultIcon, darwinDefaultIcon, otherDevicesIcon } from './defaultIcon'
+import * as chromeRequest from './chromeRequest'
 
 export function isIOSApp(appPath: string): boolean {
   const appDir = appPath.endsWith('.app')
@@ -272,7 +272,7 @@ export async function getIconDataURL(appPath: string): Promise<string> {
 
 export async function getImageDataURL(url: string): Promise<string> {
   const { 'mixed-port': port = 7890 } = await getControledMihomoConfig()
-  const res = await axios.get(url, {
+  const res = await chromeRequest.get(url, {
     responseType: 'arraybuffer',
     ...(port !== 0 && {
       proxy: {
@@ -283,6 +283,6 @@ export async function getImageDataURL(url: string): Promise<string> {
     })
   })
   const mimeType = res.headers['content-type']
-  const dataURL = `data:${mimeType};base64,${Buffer.from(res.data).toString('base64')}`
+  const dataURL = `data:${mimeType};base64,${Buffer.from(res.data as Buffer).toString('base64')}`
   return dataURL
 }

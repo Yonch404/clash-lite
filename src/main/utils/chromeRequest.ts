@@ -1,4 +1,11 @@
-import { net, session } from 'electron'
+import * as http from 'http'
+import * as https from 'https'
+import * as net from 'net'
+import * as tls from 'tls'
+import * as zlib from 'zlib'
+import { promisify } from 'util'
+import { URL } from 'url'
+import { getChromeCaBundle } from './certificate'
 
 export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
@@ -26,184 +33,463 @@ export interface Response<T = unknown> {
   url: string
 }
 
-// 复用单个 session 用于代理请求
-let proxySession: Electron.Session | null = null
-let currentProxyUrl: string | null = null
-let proxySetupPromise: Promise<void> | null = null
-
-async function getProxySession(proxyUrl: string): Promise<Electron.Session> {
-  if (!proxySession) {
-    proxySession = session.fromPartition('proxy-requests', { cache: false })
-  }
-  if (currentProxyUrl !== proxyUrl) {
-    proxySetupPromise = proxySession.setProxy({ proxyRules: proxyUrl })
-    currentProxyUrl = proxyUrl
-  }
-  if (proxySetupPromise) {
-    await proxySetupPromise
-  }
-  return proxySession
+interface RawResponse {
+  data: Buffer
+  status: number
+  statusText: string
+  headers: Record<string, string>
+  url: string
 }
 
+type HttpProxyOptions = {
+  protocol: 'http'
+  host: string
+  port: number
+}
+
+const gunzip = promisify(zlib.gunzip)
+const inflate = promisify(zlib.inflate)
+const brotliDecompress = promisify(zlib.brotliDecompress)
+
 /**
- * Make HTTP request using Chromium's network stack (via electron.net)
- * This provides better compatibility, HTTP/2 support, and system certificate integration
+ * Make HTTP requests through Node's TLS stack with Clash Lite's bundled Chrome CA bundle.
+ * HTTPS requests pass `ca` explicitly, so Node does not fall back to system roots.
  */
 export async function request<T = unknown>(
   url: string,
   options: RequestOptions = {}
 ): Promise<Response<T>> {
+  return requestWithRedirects<T>(url, options, 0)
+}
+
+async function requestWithRedirects<T>(
+  url: string,
+  options: RequestOptions,
+  redirectCount: number
+): Promise<Response<T>> {
   const {
-    method = 'GET',
-    headers = {},
-    body,
-    proxy,
-    timeout = 30000,
     responseType = 'text',
     followRedirect = true,
     maxRedirects = 20,
-    onProgress
+    method = 'GET'
   } = options
+  const raw = await performRequest(url, { ...options, method })
+  const location = raw.headers.location
 
-  return new Promise((resolve, reject) => {
-    let sessionToUse: Electron.Session = session.defaultSession
-
-    // Set up proxy if specified
-    const setupProxy = async (): Promise<void> => {
-      if (proxy) {
-        const proxyUrl = `${proxy.protocol}://${proxy.host}:${proxy.port}`
-        sessionToUse = await getProxySession(proxyUrl)
-      }
+  if (followRedirect && isRedirect(raw.status) && location) {
+    if (redirectCount >= maxRedirects) {
+      throw new Error(`Too many redirects (>${maxRedirects})`)
     }
 
-    const cleanup = (): void => {}
+    const redirectUrl = new URL(location, url).toString()
+    const redirectOptions = getRedirectOptions(options, raw.status)
+    return requestWithRedirects<T>(redirectUrl, redirectOptions, redirectCount + 1)
+  }
 
-    setupProxy()
-      .then(() => {
-        const req = net.request({
-          method,
-          url,
-          session: sessionToUse,
-          redirect: followRedirect ? 'follow' : 'manual',
-          useSessionCookies: true
-        })
+  return {
+    data: parseResponseData<T>(raw.data, responseType),
+    status: raw.status,
+    statusText: raw.statusText,
+    headers: raw.headers,
+    url: raw.url
+  }
+}
 
-        // Set request headers
-        Object.entries(headers).forEach(([key, value]) => {
-          req.setHeader(key, value)
-        })
+function getRedirectOptions(options: RequestOptions, status: number): RequestOptions {
+  const method = options.method ?? 'GET'
+  if ((status === 301 || status === 302 || status === 303) && method !== 'GET') {
+    const headers = removeEntityHeaders(options.headers ?? {})
+    return { ...options, method: 'GET', body: undefined, headers }
+  }
+  return options
+}
 
-        // Timeout handling
-        let timeoutId: NodeJS.Timeout | undefined
-        if (timeout > 0) {
-          timeoutId = setTimeout(() => {
-            req.abort()
-            cleanup()
-            reject(new Error(`Request timeout after ${timeout}ms`))
-          }, timeout)
-        }
+function removeEntityHeaders(headers: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(headers).filter(([key]) => {
+      const normalized = key.toLowerCase()
+      return normalized !== 'content-length' && normalized !== 'content-type'
+    })
+  )
+}
 
-        const chunks: Buffer[] = []
-        let redirectCount = 0
+async function performRequest(url: string, options: RequiredMethodOptions): Promise<RawResponse> {
+  const target = new URL(url)
+  if (target.protocol !== 'http:' && target.protocol !== 'https:') {
+    throw new Error(`Unsupported request protocol: ${target.protocol}`)
+  }
 
-        req.on('redirect', () => {
-          redirectCount++
-          if (redirectCount > maxRedirects) {
-            req.abort()
-            cleanup()
-            if (timeoutId) clearTimeout(timeoutId)
-            reject(new Error(`Too many redirects (>${maxRedirects})`))
-          }
-        })
+  const proxy = normalizeProxy(options.proxy)
+  if (target.protocol === 'https:') {
+    const ca = await getChromeCaBundle()
+    if (proxy) {
+      return performHttpsViaHttpProxy(target, options, proxy, ca)
+    }
+    return performDirectHttps(target, options, ca)
+  }
 
-        req.on('response', (res) => {
-          const { statusCode, statusMessage } = res
+  if (proxy) {
+    return performHttpViaHttpProxy(target, options, proxy)
+  }
+  return performDirectHttp(target, options)
+}
 
-          // Extract response headers
-          const responseHeaders: Record<string, string> = {}
-          const rawHeaders = res.rawHeaders || []
-          for (let i = 0; i < rawHeaders.length; i += 2) {
-            responseHeaders[rawHeaders[i].toLowerCase()] = rawHeaders[i + 1]
-          }
+type RequiredMethodOptions = RequestOptions & { method: NonNullable<RequestOptions['method']> }
 
-          const totalSize = parseInt(responseHeaders['content-length'] || '0', 10)
-          let loadedSize = 0
+function normalizeProxy(proxy: RequestOptions['proxy']): HttpProxyOptions | undefined {
+  if (!proxy) return undefined
+  if (proxy.protocol !== 'http') {
+    throw new Error(`Unsupported proxy protocol for custom certificate store: ${proxy.protocol}`)
+  }
+  return { protocol: 'http', host: proxy.host, port: proxy.port }
+}
 
-          res.on('data', (chunk: Buffer) => {
-            chunks.push(chunk)
-            if (onProgress && totalSize > 0) {
-              loadedSize += chunk.length
-              onProgress(loadedSize, totalSize)
-            }
-          })
+function performDirectHttp(target: URL, options: RequiredMethodOptions): Promise<RawResponse> {
+  const requestOptions: http.RequestOptions = {
+    protocol: 'http:',
+    hostname: target.hostname,
+    port: getPort(target),
+    method: options.method,
+    path: getRequestPath(target),
+    headers: buildRequestHeaders(target, options.headers)
+  }
 
-          res.on('end', () => {
-            cleanup()
-            if (timeoutId) clearTimeout(timeoutId)
+  return sendRequest(target.toString(), options, (onResponse) =>
+    http.request(requestOptions, onResponse)
+  )
+}
 
-            const buffer = Buffer.concat(chunks)
-            let data: unknown
+function performDirectHttps(
+  target: URL,
+  options: RequiredMethodOptions,
+  ca: Buffer
+): Promise<RawResponse> {
+  const requestOptions: https.RequestOptions = {
+    protocol: 'https:',
+    hostname: target.hostname,
+    port: getPort(target),
+    method: options.method,
+    path: getRequestPath(target),
+    headers: buildRequestHeaders(target, options.headers),
+    ca,
+    rejectUnauthorized: true,
+    servername: getServername(target)
+  }
 
-            try {
-              switch (responseType) {
-                case 'json':
-                  data = JSON.parse(buffer.toString('utf-8'))
-                  break
-                case 'arraybuffer':
-                  data = buffer
-                  break
-                case 'text':
-                default:
-                  data = buffer.toString('utf-8')
-              }
+  return sendRequest(target.toString(), options, (onResponse) =>
+    https.request(requestOptions, onResponse)
+  )
+}
 
-              resolve({
-                data: data as T,
-                status: statusCode,
-                statusText: statusMessage,
-                headers: responseHeaders,
-                url: url
-              })
-            } catch (error: unknown) {
-              reject(new Error(`Failed to parse response: ${String(error)}`))
-            }
-          })
+function performHttpViaHttpProxy(
+  target: URL,
+  options: RequiredMethodOptions,
+  proxy: HttpProxyOptions
+): Promise<RawResponse> {
+  const requestOptions: http.RequestOptions = {
+    protocol: 'http:',
+    hostname: proxy.host,
+    port: proxy.port,
+    method: options.method,
+    path: target.toString(),
+    headers: buildRequestHeaders(target, options.headers)
+  }
 
-          res.on('error', (error: unknown) => {
-            cleanup()
-            if (timeoutId) clearTimeout(timeoutId)
-            reject(error)
-          })
-        })
+  return sendRequest(target.toString(), options, (onResponse) =>
+    http.request(requestOptions, onResponse)
+  )
+}
 
-        req.on('error', (error: unknown) => {
-          cleanup()
-          if (timeoutId) clearTimeout(timeoutId)
-          reject(error)
-        })
+async function performHttpsViaHttpProxy(
+  target: URL,
+  options: RequiredMethodOptions,
+  proxy: HttpProxyOptions,
+  ca: Buffer
+): Promise<RawResponse> {
+  const socket = await createProxyTlsSocket(target, proxy, ca, options.timeout ?? 30000)
+  const requestOptions: http.RequestOptions = {
+    hostname: target.hostname,
+    port: getPort(target),
+    method: options.method,
+    path: getRequestPath(target),
+    headers: buildRequestHeaders(target, options.headers),
+    agent: false,
+    createConnection: () => socket
+  }
 
-        req.on('abort', () => {
-          cleanup()
-          if (timeoutId) clearTimeout(timeoutId)
-          reject(new Error('Request aborted'))
-        })
+  try {
+    return await sendRequest(target.toString(), options, (onResponse) =>
+      http.request(requestOptions, onResponse)
+    )
+  } catch (error) {
+    socket.destroy()
+    throw error
+  }
+}
 
-        // Send request body
-        if (body) {
-          if (typeof body === 'string') {
-            req.write(body, 'utf-8')
-          } else {
-            req.write(body)
-          }
-        }
+function createProxyTlsSocket(
+  target: URL,
+  proxy: HttpProxyOptions,
+  ca: Buffer,
+  timeout: number
+): Promise<tls.TLSSocket> {
+  return new Promise((resolve, reject) => {
+    let settled = false
+    let rawSocket: net.Socket | undefined
+    let tlsSocket: tls.TLSSocket | undefined
+    let timeoutId: NodeJS.Timeout | undefined
 
-        req.end()
+    const connectHost = formatHostPort(target)
+    const connectReq = http.request({
+      hostname: proxy.host,
+      port: proxy.port,
+      method: 'CONNECT',
+      path: connectHost,
+      headers: { Host: connectHost }
+    })
+
+    const cleanup = (): void => {
+      if (timeoutId) clearTimeout(timeoutId)
+    }
+    const fail = (error: Error): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      connectReq.destroy()
+      tlsSocket?.destroy()
+      rawSocket?.destroy()
+      reject(error)
+    }
+    const succeed = (socket: tls.TLSSocket): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve(socket)
+    }
+
+    if (timeout > 0) {
+      timeoutId = setTimeout(() => {
+        fail(new Error(`Request timeout after ${timeout}ms`))
+      }, timeout)
+    }
+
+    connectReq.once('connect', (res, socket, head) => {
+      rawSocket = socket
+      if (res.statusCode !== 200) {
+        fail(new Error(`Proxy CONNECT failed with status ${res.statusCode ?? 0}`))
+        return
+      }
+
+      if (head.length > 0) {
+        socket.unshift(head)
+      }
+
+      tlsSocket = tls.connect({
+        socket,
+        servername: getServername(target),
+        ca,
+        rejectUnauthorized: true
       })
-      .catch((error: unknown) => {
-        cleanup()
-        reject(new Error(`Failed to setup proxy: ${String(error)}`))
-      })
+
+      const onSecureConnect = (): void => {
+        tlsSocket?.off('error', onTlsError)
+        if (!tlsSocket) {
+          fail(new Error('TLS socket was not created'))
+          return
+        }
+        succeed(tlsSocket)
+      }
+      const onTlsError = (error: Error): void => fail(error)
+
+      tlsSocket.once('secureConnect', onSecureConnect)
+      tlsSocket.once('error', onTlsError)
+    })
+    connectReq.once('error', (error) => fail(error))
+    connectReq.end()
   })
+}
+
+function sendRequest(
+  url: string,
+  options: RequiredMethodOptions,
+  createRequest: (onResponse: (res: http.IncomingMessage) => void) => http.ClientRequest
+): Promise<RawResponse> {
+  const timeout = options.timeout ?? 30000
+  return new Promise((resolve, reject) => {
+    let settled = false
+    let req: http.ClientRequest | undefined
+    let timeoutId: NodeJS.Timeout | undefined
+
+    const cleanup = (): void => {
+      if (timeoutId) clearTimeout(timeoutId)
+    }
+    const fail = (error: Error): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      req?.destroy()
+      reject(error)
+    }
+    const succeed = (response: RawResponse): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve(response)
+    }
+
+    try {
+      req = createRequest((res) => {
+        collectResponse(res, options.onProgress)
+          .then((data) => {
+            succeed({
+              data,
+              status: res.statusCode ?? 0,
+              statusText: res.statusMessage ?? '',
+              headers: normalizeResponseHeaders(res.headers),
+              url
+            })
+          })
+          .catch((error: unknown) => {
+            fail(error instanceof Error ? error : new Error(String(error)))
+          })
+      })
+    } catch (error) {
+      fail(error instanceof Error ? error : new Error(String(error)))
+      return
+    }
+
+    if (timeout > 0) {
+      timeoutId = setTimeout(() => {
+        fail(new Error(`Request timeout after ${timeout}ms`))
+      }, timeout)
+    }
+
+    req.once('error', (error) => fail(error))
+
+    if (options.body) {
+      req.write(options.body)
+    }
+    req.end()
+  })
+}
+
+function collectResponse(
+  res: http.IncomingMessage,
+  onProgress?: (loaded: number, total: number) => void
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []
+    const totalSize = Number.parseInt(String(res.headers['content-length'] ?? '0'), 10)
+    let loadedSize = 0
+
+    res.on('data', (chunk: Buffer) => {
+      chunks.push(chunk)
+      loadedSize += chunk.length
+      if (onProgress && totalSize > 0) {
+        onProgress(loadedSize, totalSize)
+      }
+    })
+    res.once('end', () => {
+      const headers = normalizeResponseHeaders(res.headers)
+      decompressResponse(Buffer.concat(chunks), headers).then(resolve).catch(reject)
+    })
+    res.once('error', reject)
+  })
+}
+
+async function decompressResponse(
+  buffer: Buffer,
+  headers: Record<string, string>
+): Promise<Buffer> {
+  const encoding = headers['content-encoding']?.toLowerCase().trim()
+  if (!encoding || encoding === 'identity') {
+    return buffer
+  }
+
+  switch (encoding) {
+    case 'gzip':
+    case 'x-gzip':
+      return gunzip(buffer)
+    case 'deflate':
+      return inflate(buffer)
+    case 'br':
+      return brotliDecompress(buffer)
+    default:
+      return buffer
+  }
+}
+
+function parseResponseData<T>(buffer: Buffer, responseType: RequestOptions['responseType']): T {
+  switch (responseType) {
+    case 'json':
+      return JSON.parse(buffer.toString('utf-8')) as T
+    case 'arraybuffer':
+      return buffer as T
+    case 'text':
+    default:
+      return buffer.toString('utf-8') as T
+  }
+}
+
+function normalizeResponseHeaders(headers: http.IncomingHttpHeaders): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (const [key, value] of Object.entries(headers)) {
+    if (typeof value === 'string') {
+      result[key.toLowerCase()] = value
+    } else if (Array.isArray(value)) {
+      result[key.toLowerCase()] = value.join(', ')
+    }
+  }
+  return result
+}
+
+function buildRequestHeaders(
+  target: URL,
+  headers: Record<string, string> = {}
+): Record<string, string> {
+  if (hasHeader(headers, 'host')) {
+    return headers
+  }
+  return { ...headers, Host: formatHostHeader(target) }
+}
+
+function hasHeader(headers: Record<string, string>, name: string): boolean {
+  const normalized = name.toLowerCase()
+  return Object.keys(headers).some((key) => key.toLowerCase() === normalized)
+}
+
+function isRedirect(status: number): boolean {
+  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308
+}
+
+function getRequestPath(target: URL): string {
+  return `${target.pathname || '/'}${target.search}`
+}
+
+function getPort(target: URL): number {
+  if (target.port) {
+    return Number.parseInt(target.port, 10)
+  }
+  return target.protocol === 'https:' ? 443 : 80
+}
+
+function getServername(target: URL): string | undefined {
+  return net.isIP(target.hostname) ? undefined : target.hostname
+}
+
+function formatHostHeader(target: URL): string {
+  const defaultPort = target.protocol === 'https:' ? 443 : 80
+  const hostname = formatHostname(target.hostname)
+  const port = getPort(target)
+  return port === defaultPort ? hostname : `${hostname}:${port}`
+}
+
+function formatHostPort(target: URL): string {
+  return `${formatHostname(target.hostname)}:${getPort(target)}`
+}
+
+function formatHostname(hostname: string): string {
+  return hostname.includes(':') && !hostname.startsWith('[') ? `[${hostname}]` : hostname
 }
 
 /**
