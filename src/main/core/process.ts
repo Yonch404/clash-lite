@@ -7,9 +7,14 @@ import { getAxios } from './mihomoApi'
 
 const execPromise = promisify(exec)
 
-// 常量
 const CORE_READY_MAX_RETRIES = 30
 const CORE_READY_RETRY_INTERVAL_MS = 100
+
+interface CoreReadyOptions {
+  maxRetries?: number
+  retryIntervalMs?: number
+  throwOnFailure?: boolean
+}
 
 export async function cleanupSocketFile(): Promise<void> {
   if (process.platform === 'win32') {
@@ -112,28 +117,33 @@ export async function validateWindowsPipeAccess(pipePath: string): Promise<void>
   }
 }
 
-export async function waitForCoreReady(): Promise<void> {
-  for (let i = 0; i < CORE_READY_MAX_RETRIES; i++) {
+export async function waitForCoreReady(options: CoreReadyOptions = {}): Promise<boolean> {
+  const maxRetries = options.maxRetries ?? CORE_READY_MAX_RETRIES
+  const retryIntervalMs = options.retryIntervalMs ?? CORE_READY_RETRY_INTERVAL_MS
+
+  for (let i = 0; i < maxRetries; i++) {
     try {
       const axios = await getAxios(true)
       await axios.get('/')
-      managerLogger.info(
-        `Core ready after ${i + 1} attempts (${(i + 1) * CORE_READY_RETRY_INTERVAL_MS}ms)`
-      )
-      return
+      managerLogger.info(`Core ready after ${i + 1} attempts (${(i + 1) * retryIntervalMs}ms)`)
+      return true
     } catch {
       if (i === 0) {
         managerLogger.info('Waiting for core to be ready...')
       }
 
-      if (i === CORE_READY_MAX_RETRIES - 1) {
-        managerLogger.warn(
-          `Core not ready after ${CORE_READY_MAX_RETRIES} attempts, proceeding anyway`
-        )
-        return
+      if (i === maxRetries - 1) {
+        const message = `Core not ready after ${maxRetries} attempts`
+        managerLogger.warn(message)
+        if (options.throwOnFailure) {
+          throw new Error(message)
+        }
+        return false
       }
 
-      await new Promise((resolve) => setTimeout(resolve, CORE_READY_RETRY_INTERVAL_MS))
+      await new Promise((resolve) => setTimeout(resolve, retryIntervalMs))
     }
   }
+
+  return false
 }

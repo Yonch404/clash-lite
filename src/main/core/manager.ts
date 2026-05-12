@@ -237,6 +237,7 @@ function setupCoreListeners(
 ): void {
   let startupSettled = false
   let skipAutoRestart = false
+  let startupTask: Promise<void> | null = null
 
   const resolveStartup = (value: Promise<void>[]): void => {
     if (startupSettled) return
@@ -251,6 +252,60 @@ function setupCoreListeners(
     if (startupSettled) return
     startupSettled = true
     reject(reason)
+  }
+
+  const createProviderReadyPromise = (): Promise<void> => {
+    return new Promise((innerResolve) => {
+      let settled = false
+
+      function cleanup(): void {
+        clearTimeout(timeoutId)
+        proc.stdout?.off('data', onOutput)
+        proc.stderr?.off('data', onOutput)
+      }
+      function finish(): void {
+        if (settled) return
+        settled = true
+        cleanup()
+        mainWindow?.webContents.send('groupsUpdated')
+        innerResolve()
+      }
+      function onOutput(innerData: Buffer): void {
+        if (
+          innerData.toString().toLowerCase().includes('start initial compatible provider default')
+        ) {
+          finish()
+        }
+      }
+
+      const timeoutId = setTimeout(finish, 2000)
+      proc.stdout?.on('data', onOutput)
+      proc.stderr?.on('data', onOutput)
+    })
+  }
+
+  const startRuntimeServices = (): void => {
+    if (startupTask) return
+
+    startupTask = (async () => {
+      await waitForCoreReady({ maxRetries: 100, retryIntervalMs: 100, throwOnFailure: true })
+      await getAxios(true)
+      try {
+        await patchMihomoConfig({ 'log-level': logLevel })
+      } catch (error) {
+        managerLogger.warn('Failed to patch log level after core startup:', error)
+      }
+      await startMihomoTraffic()
+      await startMihomoConnections()
+      await startMihomoLogs()
+      await startMihomoMemory()
+      retry = 10
+      resolveStartup([createProviderReadyPromise()])
+    })()
+
+    startupTask.catch((error) => {
+      rejectStartup(error)
+    })
   }
 
   const handleCoreOutput = async (data: Buffer): Promise<void> => {
@@ -292,30 +347,7 @@ function setupCoreListeners(
       (process.platform === 'win32' && str.includes('RESTful API pipe listening at'))
 
     if (isApiReady) {
-      resolveStartup([
-        new Promise((innerResolve) => {
-          proc.stdout?.on('data', async (innerData) => {
-            if (
-              innerData
-                .toString()
-                .toLowerCase()
-                .includes('start initial compatible provider default')
-            ) {
-              mainWindow?.webContents.send('groupsUpdated')
-              await patchMihomoConfig({ 'log-level': logLevel })
-              innerResolve()
-            }
-          })
-        })
-      ])
-
-      await waitForCoreReady()
-      await getAxios(true)
-      await startMihomoTraffic()
-      await startMihomoConnections()
-      await startMihomoLogs()
-      await startMihomoMemory()
-      retry = 10
+      startRuntimeServices()
     }
   }
 
@@ -354,6 +386,7 @@ function setupCoreListeners(
 
   proc.stdout?.on('data', handleCoreOutput)
   proc.stderr?.on('data', handleCoreOutput)
+  startRuntimeServices()
 }
 
 // 启动核心

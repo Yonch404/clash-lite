@@ -3,7 +3,7 @@ import { existsSync } from 'fs'
 import { controledMihomoConfigPath } from '../utils/dirs'
 import { parse, stringify } from '../utils/yaml'
 import { generateProfile } from '../core/factory'
-import { patchMihomoConfig } from '../core/mihomoApi'
+import { patchMihomoConfig, restartMihomoLogs } from '../core/mihomoApi'
 import { defaultControledMihomoConfig } from '../utils/template'
 import { deepMerge } from '../utils/merge'
 import { createLogger } from '../utils/logger'
@@ -114,6 +114,9 @@ export async function patchControledMihomoConfig(patch: Partial<IMihomoConfig>):
     // 优先对运行中内核进行热更新，避免无意义重启
     try {
       await patchMihomoConfig(sanitizePatch(patch))
+      if ('log-level' in patch) {
+        await restartMihomoLogs()
+      }
     } catch (error) {
       controledMihomoLogger.warn(
         'Hot patch /configs failed, changes will apply on next restart',

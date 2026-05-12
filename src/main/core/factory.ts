@@ -57,10 +57,8 @@ export async function generateProfile(): Promise<string | undefined> {
     enable: controlledConfig.tun?.enable ?? true
   } as IMihomoTunConfig
 
-  // 确保可以拿到基础日志信息
-  // 使用 debug 可以调试内核相关问题 `debug/pprof`
-  if (['info', 'debug'].includes(profile['log-level']) === false) {
-    profile['log-level'] = 'info'
+  if (!['silent', 'error', 'warning', 'info', 'debug'].includes(profile['log-level'])) {
+    profile['log-level'] = 'warning'
   }
   // 删除空的局域网允许列表，避免局域网访问异常
   if (!profile['lan-allowed-ips']?.length) {

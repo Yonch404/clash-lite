@@ -286,6 +286,11 @@ export const startMihomoLogs = async (): Promise<void> => {
   await mihomoLogs()
 }
 
+export const restartMihomoLogs = async (): Promise<void> => {
+  stopMihomoLogs()
+  await startMihomoLogs()
+}
+
 export const stopMihomoLogs = (): void => {
   logsRetry = 0
 
@@ -299,7 +304,7 @@ export const stopMihomoLogs = (): void => {
 }
 
 const mihomoLogs = async (): Promise<void> => {
-  const { 'log-level': logLevel = 'info' } = await getControledMihomoConfig()
+  const { 'log-level': logLevel = 'warning' } = await getControledMihomoConfig()
   const dynamicIpcPath = getMihomoIpcPath()
   const wsUrl = `ws+unix:${dynamicIpcPath}:/logs?level=${logLevel}`
 

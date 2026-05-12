@@ -207,6 +207,7 @@
   "mihomo.disableEmbedCA": "不使用内置 CA 证书",
   "mihomo.disableSystemCA": "不使用系统 CA 证书",
   "mihomo.logRetentionDays": "日志保留天数",
+  "mihomo.logRetentionDaysOption": "{{days}} 天",
   "mihomo.logFileSizeLimit": "日志上限（MB）",
   "mihomo.logLevel": "日志等级",
   "mihomo.selectLogLevel": "选择日志等级",

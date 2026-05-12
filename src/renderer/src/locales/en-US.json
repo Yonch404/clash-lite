@@ -207,6 +207,7 @@
   "mihomo.disableEmbedCA": "Disable Embed CA",
   "mihomo.disableSystemCA": "Disable System CA",
   "mihomo.logRetentionDays": "Log Retention Days",
+  "mihomo.logRetentionDaysOption": "{{days}} days",
   "mihomo.logFileSizeLimit": "Single Log File Limit (MB)",
   "mihomo.logLevel": "Log Level",
   "mihomo.selectLogLevel": "Select Log Level",

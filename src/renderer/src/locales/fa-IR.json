@@ -183,6 +183,7 @@
   "mihomo.disableEmbedCA": "عدم استفاده از گواهی CA داخلی",
   "mihomo.disableSystemCA": "عدم استفاده از گواهی CA سیستم",
   "mihomo.logRetentionDays": "روزهای نگهداری لاگ",
+  "mihomo.logRetentionDaysOption": "{{days}} روز",
   "mihomo.logFileSizeLimit": "حداکثر حجم هر فایل لاگ (MB)",
   "mihomo.logLevel": "سطح لاگ",
   "mihomo.selectLogLevel": "انتخاب سطح لاگ",
