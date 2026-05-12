@@ -106,6 +106,7 @@ const MihomoConfig: React.FC = () => {
       <SettingItem title={t('mihomo.proxyColumns.title')} divider>
         <Select
           classNames={{ trigger: 'data-[hover=true]:bg-default-200' }}
+          disableAnimation
           className="w-37.5"
           size="sm"
           selectedKeys={new Set([proxyCols])}
@@ -126,6 +127,7 @@ const MihomoConfig: React.FC = () => {
         <SettingItem title={t('mihomo.cpuPriority.title')} divider>
           <Select
             classNames={{ trigger: 'data-[hover=true]:bg-default-200' }}
+            disableAnimation
             className="w-37.5"
             size="sm"
             selectedKeys={new Set([mihomoCpuPriority])}

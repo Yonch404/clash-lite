@@ -1,4 +1,4 @@
-import { Avatar, Button, Card, CardFooter, CardHeader, Chip } from '@heroui/react'
+import { Button, Card, CardFooter, CardHeader, Chip } from '@heroui/react'
 import { calcTraffic } from '@renderer/utils/calc'
 import dayjs from '@renderer/utils/dayjs'
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react'
@@ -7,8 +7,6 @@ import { CgClose, CgTrash } from 'react-icons/cg'
 interface Props {
   index: number
   info: IMihomoConnectionDetail
-  displayIcon?: boolean
-  iconUrl: string
   displayName?: string
   selected: IMihomoConnectionDetail | undefined
   setSelected: React.Dispatch<React.SetStateAction<IMihomoConnectionDetail | undefined>>
@@ -19,8 +17,6 @@ interface Props {
 const ConnectionItemComponent: React.FC<Props> = ({
   index,
   info,
-  displayIcon,
-  iconUrl,
   displayName,
   close,
   setSelected,
@@ -86,21 +82,9 @@ const ConnectionItemComponent: React.FC<Props> = ({
 
   return (
     <div className={`px-2 pb-2 ${index === 0 ? 'pt-2' : ''}`} style={{ minHeight: 80 }}>
-      <Card as="div" isPressable className="w-full" onPress={handleCardPress}>
+      <Card as="div" isPressable disableRipple className="w-full" onPress={handleCardPress}>
         <div className="w-full flex justify-between items-center">
-          {displayIcon && (
-            <div>
-              <Avatar
-                size="lg"
-                radius="sm"
-                src={iconUrl}
-                className="bg-transparent ml-2 w-14 h-14"
-              />
-            </div>
-          )}
-          <div
-            className={`w-full flex flex-col justify-start truncate relative ${displayIcon ? '-ml-2' : ''}`}
-          >
+          <div className="w-full flex flex-col justify-start truncate relative">
             <CardHeader className="pb-0 gap-1 flex items-center pr-12 relative">
               <div className="ml-2 flex-1 text-ellipsis whitespace-nowrap overflow-hidden text-left">
                 <span style={{ textAlign: 'left' }}>
@@ -162,8 +146,6 @@ const ConnectionItem = memo(ConnectionItemComponent, (prevProps, nextProps) => {
     prevProps.info.uploadSpeed === nextProps.info.uploadSpeed &&
     prevProps.info.downloadSpeed === nextProps.info.downloadSpeed &&
     prevProps.info.isActive === nextProps.info.isActive &&
-    prevProps.iconUrl === nextProps.iconUrl &&
-    prevProps.displayIcon === nextProps.displayIcon &&
     prevProps.displayName === nextProps.displayName &&
     prevProps.selected?.id === nextProps.selected?.id
   )

@@ -239,6 +239,7 @@ const Proxies: React.FC = () => {
           <Card
             as="div"
             isPressable
+            disableRipple
             fullWidth
             onPress={() => {
               setIsOpen((prev) => {

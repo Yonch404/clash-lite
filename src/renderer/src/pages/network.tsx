@@ -411,6 +411,7 @@ const IPPage: React.FC = () => {
             </div>
             <div className="flex items-center gap-1.5">
               <Select
+                disableAnimation
                 size="sm"
                 className="w-28"
                 aria-label={t('network.dataSource')}

@@ -67,6 +67,7 @@ const ProxyItemBase: React.FC<Props> = (props) => {
       as="div"
       onPress={() => onSelect(group.name, proxy.name)}
       isPressable
+      disableRipple
       fullWidth
       shadow="sm"
       className={`${

@@ -84,6 +84,7 @@ const GeneralConfig: React.FC = () => {
         <SettingItem title={t('settings.language')} divider>
           <Select
             classNames={{ trigger: 'data-[hover=true]:bg-default-200' }}
+            disableAnimation
             className="w-37.5"
             size="sm"
             selectedKeys={[language]}
@@ -207,6 +208,7 @@ const GeneralConfig: React.FC = () => {
         >
           <Select
             classNames={{ trigger: 'data-[hover=true]:bg-default-200' }}
+            disableAnimation
             className="w-37.5"
             size="sm"
             selectionMode="multiple"

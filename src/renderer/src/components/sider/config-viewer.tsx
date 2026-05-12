@@ -26,6 +26,7 @@ const ConfigViewer: React.FC<Props> = (props) => {
       classNames={{ backdrop: 'top-[48px]' }}
       size="5xl"
       hideCloseButton
+      disableAnimation
       isOpen={true}
       onOpenChange={onClose}
       scrollBehavior="inside"

@@ -244,7 +244,7 @@ const Profiles: React.FC = () => {
             >
               {t('profiles.import')}
             </Button>
-            <Dropdown>
+            <Dropdown disableAnimation>
               <DropdownTrigger>
                 <Button className="new-profile" size="sm" isIconOnly color="primary">
                   <FaPlus />

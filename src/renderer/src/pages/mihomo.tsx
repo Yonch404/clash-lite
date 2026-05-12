@@ -77,6 +77,7 @@ const Mihomo: React.FC = () => {
         <SettingItem title={t('mihomo.logLevel')} divider>
           <Select
             classNames={{ trigger: 'data-[hover=true]:bg-default-200' }}
+            disableAnimation
             className="w-37.5"
             size="sm"
             selectedKeys={new Set([logLevel])}
@@ -100,6 +101,7 @@ const Mihomo: React.FC = () => {
         <SettingItem title={t('mihomo.logRetentionDays')}>
           <Select
             classNames={{ trigger: 'data-[hover=true]:bg-default-200' }}
+            disableAnimation
             className="w-37.5"
             size="sm"
             selectedKeys={new Set([String(maxLogDays)])}

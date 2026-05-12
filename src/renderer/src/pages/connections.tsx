@@ -1,10 +1,5 @@
 import BasePage from '@renderer/components/base/base-page'
-import {
-  mihomoCloseAllConnections,
-  mihomoCloseConnection,
-  getIconDataURL,
-  getAppName
-} from '@renderer/utils/ipc'
+import { mihomoCloseAllConnections, mihomoCloseConnection, getAppName } from '@renderer/utils/ipc'
 import { Key, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Badge,
@@ -34,9 +29,6 @@ import { HiOutlineAdjustmentsHorizontal } from 'react-icons/hi2'
 import { includesIgnoreCase } from '@renderer/utils/includes'
 import { useTranslation } from 'react-i18next'
 import { IoMdPause, IoMdPlay } from 'react-icons/io'
-import { saveIconToCache, getIconFromCache } from '@renderer/utils/icon-cache'
-import { cropAndPadTransparent } from '@renderer/utils/image'
-import { platform } from '@renderer/utils/init'
 import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-config'
 
 let cachedConnections: IMihomoConnectionDetail[] = []
@@ -70,7 +62,6 @@ const Connections: React.FC = () => {
     connectionTableColumnWidths,
     connectionTableSortColumn,
     connectionTableSortDirection,
-    displayIcon = true,
     displayAppName = true
   } = appConfigValues
   const [connectionsInfo, setConnectionsInfo] = useState<IMihomoConnectionsInfo>()
@@ -84,17 +75,10 @@ const Connections: React.FC = () => {
   const [viewMode, setViewMode] = useState<'list' | 'table'>(connectionViewMode)
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set(connectionTableColumns))
 
-  const [iconMap, setIconMap] = useState<Record<string, string>>({})
   const [appNameCache, setAppNameCache] = useState<Record<string, string>>({})
-  const [firstItemRefreshTrigger, setFirstItemRefreshTrigger] = useState(0)
 
   const activeConnectionsRef = useRef(activeConnections)
   const allConnectionsRef = useRef(allConnections)
-
-  const iconRequestQueue = useRef(new Set<string>())
-  const processingIcons = useRef(new Set<string>())
-  const processIconTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const processIconIdleCallback = useRef<number | null>(null)
 
   const appNameRequestQueue = useRef(new Set<string>())
   const processingAppNames = useRef(new Set<string>())
@@ -176,11 +160,6 @@ const Connections: React.FC = () => {
     viewMode
   ])
 
-  const filteredConnectionsRef = useRef<IMihomoConnectionDetail[]>([])
-  useEffect(() => {
-    filteredConnectionsRef.current = filteredConnections
-  }, [filteredConnections])
-
   const closeAllConnections = useCallback((): void => {
     tab === 'active' ? mihomoCloseAllConnections() : trashAllClosedConnection()
   }, [tab])
@@ -242,73 +221,22 @@ const Connections: React.FC = () => {
     }
   }, [])
 
-  const processIconQueue = useCallback(async () => {
-    if (processingIcons.current.size >= 5 || iconRequestQueue.current.size === 0) return
-
-    const pathsToProcess = Array.from(iconRequestQueue.current).slice(0, 5)
-    pathsToProcess.forEach((path) => iconRequestQueue.current.delete(path))
-
-    const promises = pathsToProcess.map(async (path) => {
-      if (processingIcons.current.has(path)) return
-      processingIcons.current.add(path)
-
-      try {
-        const rawBase64 = await getIconDataURL(path)
-        if (!rawBase64) return
-
-        const fullDataURL = rawBase64.startsWith('data:')
-          ? rawBase64
-          : `data:image/png;base64,${rawBase64}`
-
-        let processedDataURL = fullDataURL
-        if (platform !== 'darwin') {
-          processedDataURL = await cropAndPadTransparent(fullDataURL)
-        }
-
-        saveIconToCache(path, processedDataURL)
-
-        setIconMap((prev) => ({ ...prev, [path]: processedDataURL }))
-
-        const firstConnection = filteredConnectionsRef.current[0]
-        if (firstConnection?.metadata.processPath === path) {
-          setFirstItemRefreshTrigger((prev) => prev + 1)
-        }
-      } catch {
-        // ignore
-      } finally {
-        processingIcons.current.delete(path)
-      }
-    })
-
-    await Promise.all(promises)
-
-    if (iconRequestQueue.current.size > 0) {
-      if ('requestIdleCallback' in window) {
-        processIconIdleCallback.current = requestIdleCallback(() => processIconQueue(), {
-          timeout: 1000
-        })
-      } else {
-        processIconTimer.current = setTimeout(processIconQueue, 50)
-      }
-    }
-  }, [])
-
   useEffect(() => {
-    if (!displayIcon || findProcessMode === 'off') return
+    if (!displayAppName || findProcessMode === 'off') return
 
     const visiblePaths = new Set<string>()
     const otherPaths = new Set<string>()
 
-    const visibleConnections = filteredConnectionsRef.current.slice(0, 20)
+    const visibleConnections = filteredConnections.slice(0, 20)
     visibleConnections.forEach((c) => {
       const path = c.metadata.processPath || ''
-      visiblePaths.add(path)
+      if (path) visiblePaths.add(path)
     })
 
     const collectPaths = (connections: IMihomoConnectionDetail[]) => {
       for (const c of connections) {
         const path = c.metadata.processPath || ''
-        if (!visiblePaths.has(path)) {
+        if (path && !visiblePaths.has(path)) {
           otherPaths.add(path)
         }
       }
@@ -317,23 +245,6 @@ const Connections: React.FC = () => {
     collectPaths(activeConnections)
     collectPaths(closedConnections)
 
-    const loadIcon = (path: string, isVisible: boolean = false): void => {
-      if (iconMap[path] || processingIcons.current.has(path)) return
-
-      if (iconRequestQueue.current.size >= MAX_QUEUE_SIZE) return
-
-      const fromCache = getIconFromCache(path)
-      if (fromCache) {
-        setIconMap((prev) => ({ ...prev, [path]: fromCache }))
-        if (isVisible && filteredConnections[0]?.metadata.processPath === path) {
-          setFirstItemRefreshTrigger((prev) => prev + 1)
-        }
-        return
-      }
-
-      iconRequestQueue.current.add(path)
-    }
-
     const loadAppName = (path: string): void => {
       if (appNameCache[path] || processingAppNames.current.has(path)) return
       if (appNameRequestQueue.current.size >= MAX_QUEUE_SIZE) return
@@ -341,42 +252,30 @@ const Connections: React.FC = () => {
     }
 
     visiblePaths.forEach((path) => {
-      loadIcon(path, true)
-      if (displayAppName) loadAppName(path)
+      loadAppName(path)
     })
 
     if (otherPaths.size > 0) {
       const loadOtherPaths = () => {
         otherPaths.forEach((path) => {
-          loadIcon(path, false)
-          if (displayAppName) loadAppName(path)
+          loadAppName(path)
         })
       }
 
       setTimeout(loadOtherPaths, 100)
     }
 
-    if (processIconTimer.current) clearTimeout(processIconTimer.current)
-    if (processIconIdleCallback.current) cancelIdleCallback(processIconIdleCallback.current)
     if (processAppNameTimer.current) clearTimeout(processAppNameTimer.current)
 
-    processIconTimer.current = setTimeout(processIconQueue, 10)
-    if (displayAppName) {
-      processAppNameTimer.current = setTimeout(processAppNameQueue, 10)
-    }
+    processAppNameTimer.current = setTimeout(processAppNameQueue, 10)
 
     return (): void => {
-      if (processIconTimer.current) clearTimeout(processIconTimer.current)
-      if (processIconIdleCallback.current) cancelIdleCallback(processIconIdleCallback.current)
       if (processAppNameTimer.current) clearTimeout(processAppNameTimer.current)
     }
   }, [
     activeConnections,
     closedConnections,
-    iconMap,
     appNameCache,
-    displayIcon,
-    processIconQueue,
     processAppNameQueue,
     displayAppName,
     findProcessMode,
@@ -436,9 +335,6 @@ const Connections: React.FC = () => {
 
   const renderConnectionItem = useCallback(
     (i: number, connection: IMihomoConnectionDetail) => {
-      const path = connection.metadata.processPath || ''
-      const iconUrl = (displayIcon && findProcessMode !== 'off' && iconMap[path]) || ''
-      const itemKey = i === 0 ? `${connection.id}-${firstItemRefreshTrigger}` : connection.id
       const displayName =
         displayAppName && connection.metadata.processPath
           ? appNameCache[connection.metadata.processPath]
@@ -449,26 +345,15 @@ const Connections: React.FC = () => {
           setSelected={setSelected}
           setIsDetailModalOpen={setIsDetailModalOpen}
           selected={selected}
-          iconUrl={iconUrl}
-          displayIcon={displayIcon && findProcessMode !== 'off'}
           displayName={displayName}
           close={closeConnection}
           index={i}
-          key={itemKey}
+          key={connection.id}
           info={connection}
         />
       )
     },
-    [
-      displayIcon,
-      iconMap,
-      firstItemRefreshTrigger,
-      selected,
-      closeConnection,
-      appNameCache,
-      findProcessMode,
-      displayAppName
-    ]
+    [selected, closeConnection, appNameCache, displayAppName]
   )
 
   return (
@@ -604,7 +489,7 @@ const Connections: React.FC = () => {
           />
 
           {viewMode === 'table' && (
-            <Dropdown>
+            <Dropdown disableAnimation>
               <DropdownTrigger>
                 <Button
                   size="sm"
@@ -660,6 +545,7 @@ const Connections: React.FC = () => {
             <>
               <Select
                 classNames={{ trigger: 'data-[hover=true]:bg-default-200' }}
+                disableAnimation
                 size="sm"
                 className="w-45 min-w-32.75"
                 aria-label={t('connections.orderBy')}

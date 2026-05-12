@@ -64,7 +64,6 @@ import { closeFloatingWindow, showContextMenu, showFloatingWindow } from '../res
 import { addProfileUpdater, removeProfileUpdater } from '../core/profileUpdater'
 import { getImageDataURL } from './image'
 import { get as httpGet } from './chromeRequest'
-import { getIconDataURL } from './icon'
 import { getAppName } from './appName'
 import { logDir } from './dirs'
 
@@ -198,7 +197,6 @@ const asyncHandlers: Record<string, AsyncFn> = {
   measureLatency,
   getImageDataURL,
   readImageFileDataURL,
-  getIconDataURL,
   getAppName,
   changeLanguage,
   setTitleBarOverlay

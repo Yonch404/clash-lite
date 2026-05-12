@@ -243,8 +243,3 @@ export async function setTitleBarOverlay(overlay: TitleBarOverlayOptions): Promi
 export async function getAppName(appPath: string): Promise<string> {
   return invoke<string>('getAppName', appPath)
 }
-
-// getIconDataURL: 获取应用图标的 Base64 数据
-export async function getIconDataURL(appPath: string): Promise<string> {
-  return invoke<string>('getIconDataURL', appPath)
-}

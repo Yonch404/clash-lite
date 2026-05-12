@@ -100,7 +100,7 @@ const CopyableSettingItem: React.FC<{
     <SettingItem
       title={title}
       actions={
-        <Dropdown>
+        <Dropdown disableAnimation>
           <DropdownTrigger>
             <Button title={t('connections.detail.copyRule')} isIconOnly size="sm" variant="light">
               <BiCopy className="text-lg" />
@@ -137,6 +137,7 @@ const ConnectionDetailModal: React.FC<Props> = (props) => {
       classNames={{ backdrop: 'top-[48px]' }}
       size="xl"
       hideCloseButton
+      disableAnimation
       isOpen={true}
       onOpenChange={onClose}
       scrollBehavior="inside"

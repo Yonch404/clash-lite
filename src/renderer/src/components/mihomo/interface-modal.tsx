@@ -32,6 +32,7 @@ const InterfaceModal: React.FC<Props> = (props) => {
       backdrop="blur"
       classNames={{ backdrop: 'top-[48px]' }}
       hideCloseButton
+      disableAnimation
       isOpen={true}
       onOpenChange={onClose}
       scrollBehavior="inside"
