@@ -30,6 +30,9 @@ const MihomoCoreCard: React.FC<Props> = (props) => {
   const [mem, setMem] = useState(0)
   const [restarting, setRestarting] = useState(false)
   const { t } = useTranslation()
+  const coreVersion = version?.version ?? '-'
+  const coreVersionFontSize =
+    coreVersion.length > 34 ? '0.625rem' : coreVersion.length > 26 ? '0.72rem' : '1rem'
 
   useEffect(() => {
     const token = PubSub.subscribe('mihomo-core-changed', () => {
@@ -74,12 +77,14 @@ const MihomoCoreCard: React.FC<Props> = (props) => {
         onPress={(event) => handleSiderCardPress(event, goToPage)}
         className={siderCardClass(match, disableAnimations)}
       >
-        <CardBody>
-          <div className="flex justify-between h-[32px]">
+        <CardBody className="overflow-hidden">
+          <div className="flex justify-between h-[32px] overflow-hidden">
             <h3
-              className={`text-md font-bold leading-[32px] ${match ? 'text-primary-foreground' : 'text-foreground'} `}
+              className={`min-w-0 flex-1 overflow-hidden whitespace-nowrap font-bold leading-[32px] ${match ? 'text-primary-foreground' : 'text-foreground'} `}
+              style={{ fontSize: coreVersionFontSize }}
+              title={coreVersion}
             >
-              {version?.version ?? '-'}
+              {coreVersion}
             </h3>
 
             <Button
