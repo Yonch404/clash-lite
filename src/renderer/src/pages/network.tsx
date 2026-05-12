@@ -413,6 +413,7 @@ const IPPage: React.FC = () => {
               <Select
                 size="sm"
                 className="w-28"
+                aria-label={t('network.dataSource')}
                 selectedKeys={[provider]}
                 onSelectionChange={(keys) => {
                   const val = Array.from(keys)[0] as IPProvider
@@ -429,6 +430,7 @@ const IPPage: React.FC = () => {
                 variant="light"
                 isLoading={loading}
                 onPress={() => fetchIP()}
+                aria-label={t('common.refresh')}
                 className="h-7 w-7 min-w-0"
               >
                 <IoRefresh size={16} />
