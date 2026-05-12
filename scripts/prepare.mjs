@@ -13,9 +13,8 @@ if (process.argv.slice(2).length !== 0) {
 }
 
 /* ======= mihomo release ======= */
-const MIHOMO_VERSION_URL = 'https://github.com/Yonch404/mihomo/releases/latest/download/version.txt'
-const MIHOMO_URL_PREFIX = `https://github.com/Yonch404/mihomo/releases/download`
-let MIHOMO_VERSION
+const MIHOMO_RELEASE_API = 'https://api.github.com/repos/Yonch404/mihomo/releases/latest'
+let MIHOMO_RELEASE
 
 const MIHOMO_MAP = {
   'win32-x64': 'mihomo-singbox-windows-amd64-v3',
@@ -24,17 +23,24 @@ const MIHOMO_MAP = {
   'linux-arm64': 'mihomo-singbox-linux-arm64'
 }
 
-// Fetch the latest release version from the version.txt file
-async function getLatestReleaseVersion() {
+async function getLatestRelease() {
   try {
-    const response = await fetch(MIHOMO_VERSION_URL, {
-      method: 'GET'
+    const response = await fetch(MIHOMO_RELEASE_API, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'Clash Lite'
+      }
     })
-    let v = await response.text()
-    MIHOMO_VERSION = v.trim() // Trim to remove extra whitespaces
-    console.log(`Latest release version: ${MIHOMO_VERSION}`)
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
+    }
+
+    MIHOMO_RELEASE = await response.json()
+    console.log(`Latest release version: ${MIHOMO_RELEASE.tag_name}`)
   } catch (error) {
-    console.error('Error fetching latest release version:', error.message)
+    console.error('Error fetching latest release:', error.message)
     process.exit(1)
   }
 }
@@ -53,16 +59,23 @@ function mihomo() {
   const name = MIHOMO_MAP[`${platform}-${arch}`]
   const isWin = platform === 'win32'
   const urlExt = isWin ? 'zip' : 'gz'
-  const downloadURL = `${MIHOMO_URL_PREFIX}/${MIHOMO_VERSION}/${name}-${MIHOMO_VERSION}.${urlExt}`
+  const asset = MIHOMO_RELEASE?.assets?.find(
+    (item) => item.name.startsWith(`${name}-`) && item.name.endsWith(`.${urlExt}`)
+  )
+
+  if (!asset) {
+    const availableAssets = MIHOMO_RELEASE?.assets?.map((item) => item.name).join(', ') || 'none'
+    throw new Error(`mihomo asset not found for ${platform}-${arch}. Available: ${availableAssets}`)
+  }
+
   const exeFile = `${name}${isWin ? '.exe' : ''}`
-  const zipFile = `${name}-${MIHOMO_VERSION}.${urlExt}`
 
   return {
     name: 'mihomo',
     targetFile: `mihomo${isWin ? '.exe' : ''}`,
     exeFile,
-    zipFile,
-    downloadURL
+    zipFile: asset.name,
+    downloadURL: asset.browser_download_url
   }
 }
 
@@ -354,7 +367,7 @@ const tasks = [
   },
   {
     name: 'mihomo',
-    func: () => getLatestReleaseVersion().then(() => resolveSidecar(mihomo())),
+    func: () => getLatestRelease().then(() => resolveSidecar(mihomo())),
     retry: 5
   },
   { name: 'mmdb', func: resolveMmdb, retry: 5 },
