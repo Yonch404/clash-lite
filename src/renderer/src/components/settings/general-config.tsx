@@ -279,6 +279,7 @@ const GeneralConfig: React.FC = () => {
             size="sm"
             color="primary"
             selectedKey={appTheme}
+            classNames={{ tabContent: 'text-[13px]' }}
             onSelectionChange={(key) => {
               const nextTheme = key as AppTheme
               setTheme(nextTheme)
@@ -295,6 +296,7 @@ const GeneralConfig: React.FC = () => {
             size="sm"
             color="primary"
             selectedKey={triggerMainWindowBehavior}
+            classNames={{ tabContent: 'text-[13px]' }}
             onSelectionChange={(key) => {
               patchAppConfig({ triggerMainWindowBehavior: key as 'show' | 'toggle' })
             }}

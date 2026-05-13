@@ -152,6 +152,7 @@ const Sysproxy: React.FC = () => {
             size="sm"
             color="primary"
             selectedKey={values.mode}
+            classNames={{ tabContent: 'text-[13px]' }}
             onSelectionChange={(key: Key) => setValues({ ...values, mode: key as SysProxyMode })}
           >
             <Tab key="manual" title={t('sysproxy.mode.manual')} />

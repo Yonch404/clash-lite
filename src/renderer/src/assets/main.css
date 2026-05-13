@@ -85,6 +85,13 @@
   user-select: text !important;
 }
 
+[role='option'],
+[role='menuitem'],
+[role='menuitemcheckbox'],
+[role='menuitemradio'] {
+  cursor: default !important;
+}
+
 *:focus {
   outline: none;
   outline-color: transparent;
