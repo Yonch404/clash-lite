@@ -36,7 +36,6 @@ type MihomoProxyType =
   | 'Masque'
   | 'TrustTunnel'
 type TunStack = 'gvisor' | 'mixed' | 'system'
-type FindProcessMode = 'off' | 'strict' | 'always'
 type DnsMode = 'normal' | 'fake-ip' | 'redir-host' | 'hosts'
 type FilterMode = 'blacklist' | 'whitelist' | 'rule'
 type NetworkInterfaceInfo = os.NetworkInterfaceInfo
@@ -207,7 +206,6 @@ interface INetworkLatencyTarget {
 }
 
 interface IAppConfig {
-  core: 'mihomo'
   proxyDisplayMode: 'simple' | 'full'
   profileDisplayDate?: 'expire' | 'update'
   envType?: ('bash' | 'cmd' | 'powershell' | 'fish' | 'nushell')[]
@@ -233,7 +231,6 @@ interface IAppConfig {
   proxyInTray: boolean
   showCurrentProxyInTray: boolean
   appTheme: AppTheme
-  customTheme?: string
   autoCheckUpdate: boolean
   silentStart: boolean
   sysProxy: ISysProxyConfig
@@ -245,24 +242,12 @@ interface IAppConfig {
   delayTestTimeout?: number
   networkLatencyTargets?: INetworkLatencyTarget[]
   subscriptionTimeout?: number
-  encryptedPassword?: number[]
   useDockIcon?: boolean
   showTraffic?: boolean
   trayProxyGroupStyle?: 'default' | 'submenu'
   disableAnimations?: boolean
   language?: 'zh-CN' | 'zh-TW' | 'en-US' | 'ru-RU' | 'fa-IR'
   triggerMainWindowBehavior?: 'show' | 'toggle'
-  showMixedPort?: number
-  enableMixedPort?: boolean
-  showSocksPort?: number
-  enableSocksPort?: boolean
-  showHttpPort?: number
-  enableHttpPort?: boolean
-  showRedirPort?: number
-  enableRedirPort?: boolean
-  showTproxyPort?: number
-  enableTproxyPort?: boolean
-  testProfileOnStart?: boolean
 }
 
 interface IMihomoTunConfig {
@@ -342,33 +327,10 @@ interface IMihomoSnifferConfig {
   }
 }
 
-interface IMihomoProfileConfig {
-  'store-selected'?: boolean
-  'store-fake-ip'?: boolean
-}
-
 interface IMihomoConfig {
-  'external-controller-pipe': string
-  'external-controller-unix': string
-  'external-controller': string
-  secret?: string
-  ipv6: boolean
   mode: OutboundMode
   'mixed-port': number
-  'allow-lan': boolean
-  'unified-delay': boolean
-  'tcp-concurrent': boolean
   'log-level': LogLevel
-  'find-process-mode': FindProcessMode
-  'socks-port'?: number
-  'redir-port'?: number
-  'tproxy-port'?: number
-  'skip-auth-prefixes'?: string[]
-  'bind-address'?: string
-  'lan-allowed-ips'?: string[]
-  'lan-disallowed-ips'?: string[]
-  authentication: string[]
-  port?: number
   proxies?: []
   'proxy-groups'?: []
   rules?: []
@@ -385,7 +347,6 @@ interface IMihomoConfig {
   tun: IMihomoTunConfig
   dns: IMihomoDNSConfig
   sniffer: IMihomoSnifferConfig
-  profile: IMihomoProfileConfig
 }
 
 interface IProfileConfig {

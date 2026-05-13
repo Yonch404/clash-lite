@@ -17,7 +17,6 @@ const MihomoConfig: React.FC = () => {
     diffWorkDir = false,
     delayTestConcurrency,
     delayTestTimeout,
-    testProfileOnStart = true,
     delayTestUrl,
     userAgent,
     subscriptionTimeout = 30000,
@@ -131,6 +130,7 @@ const MihomoConfig: React.FC = () => {
             className="w-37.5"
             size="sm"
             selectedKeys={new Set([mihomoCpuPriority])}
+            aria-label={t('mihomo.cpuPriority.title')}
             disallowEmptySelection={true}
             onSelectionChange={async (v) => {
               try {
@@ -177,26 +177,6 @@ const MihomoConfig: React.FC = () => {
             } catch (e) {
               toast.error(String(e))
             }
-          }}
-        />
-      </SettingItem>
-
-      <SettingItem
-        title={t('mihomo.testProfileOnStart')}
-        actions={
-          <Tooltip content={t('mihomo.testProfileOnStartTooltip')}>
-            <Button isIconOnly size="sm" variant="light">
-              <IoIosHelpCircle className="text-lg" />
-            </Button>
-          </Tooltip>
-        }
-        divider
-      >
-        <Switch
-          size="sm"
-          isSelected={testProfileOnStart}
-          onValueChange={(v) => {
-            patchAppConfig({ testProfileOnStart: v })
           }}
         />
       </SettingItem>

@@ -13,26 +13,48 @@ const controledMihomoLogger = createLogger('ControledMihomo')
 let controledMihomoConfig: Partial<IMihomoConfig> // mihomo.yaml
 let controledMihomoWriteQueue: Promise<void> = Promise.resolve()
 
+const CONTROLLED_CONFIG_KEYS: (keyof IMihomoConfig)[] = ['mode', 'mixed-port', 'log-level', 'tun']
+
 function cloneDefaultControledMihomoConfig(): Partial<IMihomoConfig> {
   return JSON.parse(JSON.stringify(defaultControledMihomoConfig)) as Partial<IMihomoConfig>
 }
 
-function sanitizePatch(patch: Partial<IMihomoConfig>): Partial<IMihomoConfig> {
-  const sanitized = { ...patch }
+function pickControledMihomoConfig(config: Partial<IMihomoConfig>): Partial<IMihomoConfig> {
+  const picked: Partial<IMihomoConfig> = {}
 
-  delete sanitized.dns
-  delete sanitized.hosts
-  delete sanitized.sniffer
-  delete sanitized['geo-auto-update']
-  delete sanitized['geo-update-interval']
-  delete sanitized['geodata-mode']
-  delete sanitized['geox-url']
-
-  if (sanitized.tun) {
-    sanitized.tun = { enable: sanitized.tun.enable ?? true } as IMihomoTunConfig
+  for (const key of CONTROLLED_CONFIG_KEYS) {
+    if (config[key] !== undefined) {
+      picked[key] = config[key] as never
+    }
   }
 
-  return sanitized
+  if (picked.tun) {
+    picked.tun = { enable: picked.tun.enable ?? true } as IMihomoTunConfig
+  }
+
+  return picked
+}
+
+function normalizeControledMihomoConfig(config: Partial<IMihomoConfig>): Partial<IMihomoConfig> {
+  const normalized = pickControledMihomoConfig(config)
+
+  if (typeof normalized['mixed-port'] !== 'number' || Number.isNaN(normalized['mixed-port'])) {
+    normalized['mixed-port'] = defaultControledMihomoConfig['mixed-port']
+  }
+
+  if (!['rule', 'global', 'direct'].includes(normalized.mode || '')) {
+    normalized.mode = defaultControledMihomoConfig.mode
+  }
+
+  if (!['silent', 'error', 'warning', 'info', 'debug'].includes(normalized['log-level'] || '')) {
+    normalized['log-level'] = defaultControledMihomoConfig['log-level']
+  }
+
+  normalized.tun = {
+    enable: normalized.tun?.enable ?? true
+  } as IMihomoTunConfig
+
+  return normalized
 }
 
 export async function getControledMihomoConfig(force = false): Promise<Partial<IMihomoConfig>> {
@@ -49,34 +71,18 @@ export async function getControledMihomoConfig(force = false): Promise<Partial<I
       }
     }
 
-    // 确保配置包含所有必要的默认字段，处理升级场景
-    controledMihomoConfig = deepMerge(cloneDefaultControledMihomoConfig(), controledMihomoConfig)
+    const mergedConfig = deepMerge(cloneDefaultControledMihomoConfig(), controledMihomoConfig)
+    const normalizedConfig = normalizeControledMihomoConfig(mergedConfig)
 
-    // 清理端口字段中的 NaN 值，恢复为默认值
-    const portFields = ['mixed-port', 'socks-port', 'port', 'redir-port', 'tproxy-port'] as const
-    for (const field of portFields) {
-      if (
-        typeof controledMihomoConfig[field] !== 'number' ||
-        Number.isNaN(controledMihomoConfig[field])
-      ) {
-        controledMihomoConfig[field] = defaultControledMihomoConfig[field]
-      }
-    }
-
-    const sanitizedConfig = sanitizePatch(controledMihomoConfig)
-    sanitizedConfig.tun = {
-      enable: sanitizedConfig.tun?.enable ?? true
-    } as IMihomoTunConfig
-
-    if (JSON.stringify(sanitizedConfig) !== JSON.stringify(controledMihomoConfig)) {
-      controledMihomoConfig = sanitizedConfig
+    if (JSON.stringify(normalizedConfig) !== JSON.stringify(mergedConfig)) {
+      controledMihomoConfig = normalizedConfig
       try {
         await writeFile(controledMihomoConfigPath(), stringify(controledMihomoConfig), 'utf-8')
       } catch (error) {
-        controledMihomoLogger.error('Failed to sanitize mihomo.yaml file', error)
+        controledMihomoLogger.error('Failed to update mihomo.yaml file', error)
       }
     } else {
-      controledMihomoConfig = sanitizedConfig
+      controledMihomoConfig = normalizedConfig
     }
   }
   if (typeof controledMihomoConfig !== 'object')
@@ -86,34 +92,26 @@ export async function getControledMihomoConfig(force = false): Promise<Partial<I
 
 export async function patchControledMihomoConfig(patch: Partial<IMihomoConfig>): Promise<void> {
   controledMihomoWriteQueue = controledMihomoWriteQueue.then(async () => {
-    patch = sanitizePatch(patch)
+    patch = pickControledMihomoConfig(patch)
 
-    // 过滤端口字段中的 NaN 值，防止写入无效配置
-    const portFields = ['mixed-port', 'socks-port', 'port', 'redir-port', 'tproxy-port'] as const
-    for (const field of portFields) {
-      if (field in patch && (typeof patch[field] !== 'number' || Number.isNaN(patch[field]))) {
-        delete patch[field]
-      }
+    if (
+      'mixed-port' in patch &&
+      (typeof patch['mixed-port'] !== 'number' || Number.isNaN(patch['mixed-port']))
+    ) {
+      delete patch['mixed-port']
     }
 
-    controledMihomoConfig = deepMerge(controledMihomoConfig, patch)
-    controledMihomoConfig.tun = {
-      enable: controledMihomoConfig.tun?.enable ?? true
-    } as IMihomoTunConfig
-    delete controledMihomoConfig.dns
-    delete controledMihomoConfig.hosts
-    delete controledMihomoConfig.sniffer
-    delete controledMihomoConfig['geo-auto-update']
-    delete controledMihomoConfig['geo-update-interval']
-    delete controledMihomoConfig['geodata-mode']
-    delete controledMihomoConfig['geox-url']
+    const currentConfig = controledMihomoConfig ?? (await getControledMihomoConfig())
+    controledMihomoConfig = normalizeControledMihomoConfig(deepMerge(currentConfig, patch))
 
     await generateProfile()
     await writeFile(controledMihomoConfigPath(), stringify(controledMihomoConfig), 'utf-8')
 
     // 优先对运行中内核进行热更新，避免无意义重启
     try {
-      await patchMihomoConfig(sanitizePatch(patch))
+      if (Object.keys(patch).length > 0) {
+        await patchMihomoConfig(patch)
+      }
       if ('log-level' in patch) {
         await restartMihomoLogs()
       }

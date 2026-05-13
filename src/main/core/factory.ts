@@ -6,28 +6,7 @@ import { mihomoProfileWorkDir, mihomoWorkConfigPath, mihomoWorkDir } from '../ut
 import { stringify } from '../utils/yaml'
 import { deepMerge } from '../utils/merge'
 
-const CONTROLLED_CONFIG_KEYS: (keyof IMihomoConfig)[] = [
-  'external-controller',
-  'ipv6',
-  'mode',
-  'mixed-port',
-  'socks-port',
-  'port',
-  'redir-port',
-  'tproxy-port',
-  'allow-lan',
-  'unified-delay',
-  'tcp-concurrent',
-  'log-level',
-  'find-process-mode',
-  'bind-address',
-  'lan-allowed-ips',
-  'lan-disallowed-ips',
-  'authentication',
-  'skip-auth-prefixes',
-  'tun',
-  'profile'
-]
+const CONTROLLED_CONFIG_KEYS: (keyof IMihomoConfig)[] = ['mode', 'mixed-port', 'log-level', 'tun']
 
 let runtimeConfigStr: string = ''
 let runtimeConfig: IMihomoConfig = {} as IMihomoConfig
@@ -59,10 +38,6 @@ export async function generateProfile(): Promise<string | undefined> {
 
   if (!['silent', 'error', 'warning', 'info', 'debug'].includes(profile['log-level'])) {
     profile['log-level'] = 'warning'
-  }
-  // 删除空的局域网允许列表，避免局域网访问异常
-  if (!profile['lan-allowed-ips']?.length) {
-    delete profile['lan-allowed-ips']
   }
   runtimeConfig = profile
   runtimeConfigStr = stringify(profile)

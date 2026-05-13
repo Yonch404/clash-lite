@@ -29,15 +29,12 @@ import { HiOutlineAdjustmentsHorizontal } from 'react-icons/hi2'
 import { includesIgnoreCase } from '@renderer/utils/includes'
 import { useTranslation } from 'react-i18next'
 import { IoMdPause, IoMdPlay } from 'react-icons/io'
-import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-config'
 
 let cachedConnections: IMihomoConnectionDetail[] = []
 const MAX_QUEUE_SIZE = 100
 
 const Connections: React.FC = () => {
   const { t } = useTranslation()
-  const { controledMihomoConfig } = useControledMihomoConfig()
-  const { 'find-process-mode': findProcessMode = 'always' } = controledMihomoConfig || {}
   const [filter, setFilter] = useState('')
   const { appConfig, patchAppConfig } = useAppConfig()
   const appConfigValues: Partial<IAppConfig> = appConfig ?? {}
@@ -222,7 +219,7 @@ const Connections: React.FC = () => {
   }, [])
 
   useEffect(() => {
-    if (!displayAppName || findProcessMode === 'off') return
+    if (!displayAppName) return
 
     const visiblePaths = new Set<string>()
     const otherPaths = new Set<string>()
@@ -278,7 +275,6 @@ const Connections: React.FC = () => {
     appNameCache,
     processAppNameQueue,
     displayAppName,
-    findProcessMode,
     filteredConnections
   ])
 

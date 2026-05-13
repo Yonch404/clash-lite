@@ -6,12 +6,7 @@ import path from 'path'
 import { app, dialog } from 'electron'
 import { startPacServer } from '../resolve/server'
 import { triggerSysProxy } from '../sys/sysproxy'
-import {
-  getAppConfig,
-  getControledMihomoConfig,
-  patchAppConfig,
-  patchControledMihomoConfig
-} from '../config'
+import { getAppConfig } from '../config'
 import i18next, { resources } from '../../shared/i18n'
 import { stringify } from './yaml'
 import {
@@ -262,97 +257,6 @@ async function cleanup(): Promise<void> {
   await Promise.all([...cacheCleanup, ...logCleanup])
 }
 
-// 迁移：修复 appTheme
-async function migrateAppTheme(): Promise<void> {
-  const { appTheme = 'system' } = await getAppConfig()
-  if (!['system', 'light', 'dark'].includes(appTheme)) {
-    await patchAppConfig({ appTheme: 'system' })
-  }
-}
-
-async function migrateDisabledFeatures(): Promise<void> {
-  await patchAppConfig({
-    core: 'mihomo',
-    customTheme: 'default.css'
-  })
-}
-
-// 迁移：envType 字符串转数组
-async function migrateEnvType(): Promise<void> {
-  const { envType } = await getAppConfig()
-  if (typeof envType === 'string') {
-    await patchAppConfig({ envType: [envType] })
-  }
-}
-
-// 迁移：禁用托盘时必须显示悬浮窗
-async function migrateTraySettings(): Promise<void> {
-  const { showFloatingWindow = false, disableTray = false } = await getAppConfig()
-  if (!showFloatingWindow && disableTray) {
-    await patchAppConfig({ disableTray: false })
-  }
-}
-
-// 迁移：移除加密密码
-async function migrateRemovePassword(): Promise<void> {
-  const { encryptedPassword } = await getAppConfig()
-  if (encryptedPassword) {
-    await patchAppConfig({ encryptedPassword: undefined })
-  }
-}
-
-// 迁移：mihomo 配置默认值
-async function migrateMihomoConfig(): Promise<void> {
-  const config = await getControledMihomoConfig()
-  const patches: Partial<IMihomoConfig> = {}
-
-  // skip-auth-prefixes
-  if (!config['skip-auth-prefixes']) {
-    patches['skip-auth-prefixes'] = ['127.0.0.1/32', '::1/128']
-  } else if (
-    config['skip-auth-prefixes'].length >= 1 &&
-    config['skip-auth-prefixes'][0] === '127.0.0.1/32' &&
-    !config['skip-auth-prefixes'].includes('::1/128')
-  ) {
-    patches['skip-auth-prefixes'] = [
-      '127.0.0.1/32',
-      '::1/128',
-      ...config['skip-auth-prefixes'].slice(1)
-    ]
-  }
-
-  // 其他默认值
-  if (!config.authentication) patches.authentication = []
-  if (!config['bind-address']) patches['bind-address'] = '*'
-  if (!config['lan-allowed-ips']) patches['lan-allowed-ips'] = ['0.0.0.0/0', '::/0']
-  if (!config['lan-disallowed-ips']) patches['lan-disallowed-ips'] = []
-
-  // TUN defaults to enabled for new configs, then keeps the user's switch state.
-  if (config.tun?.enable === undefined) {
-    patches.tun = { enable: true } as IMihomoTunConfig
-  }
-
-  // 移除废弃配置
-  if (config['external-controller-unix']) patches['external-controller-unix'] = undefined
-  if (config['external-controller-pipe']) patches['external-controller-pipe'] = undefined
-  if (config['external-controller'] === undefined) patches['external-controller'] = ''
-
-  if (Object.keys(patches).length > 0) {
-    await patchControledMihomoConfig(patches)
-  }
-}
-
-async function migration(): Promise<void> {
-  await Promise.all([
-    migrateAppTheme(),
-    migrateEnvType(),
-    migrateTraySettings(),
-    migrateRemovePassword(),
-    migrateMihomoConfig(),
-    migrateDisabledFeatures()
-  ])
-}
-
 function initDeeplink(): void {
   if (process.defaultApp) {
     if (process.argv.length >= 2) {
@@ -372,7 +276,6 @@ export async function initBasic(): Promise<void> {
   initBasicPromise = (async () => {
     await initDirs()
     await initConfig()
-    await migration()
 
     isInitBasicCompleted = true
   })()
