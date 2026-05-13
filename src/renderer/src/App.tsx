@@ -21,7 +21,6 @@ import NetworkCard from '@renderer/components/sider/network-card'
 import { createTourDriver, getDriver, startTourIfNeeded } from '@renderer/utils/tour'
 import 'driver.js/dist/driver.css'
 import { useTranslation } from 'react-i18next'
-import MihomoIcon from './components/base/mihomo-icon'
 
 let navigate: NavigateFunction
 
@@ -93,23 +92,24 @@ const App: React.FC = () => {
           <div
             className={`flex justify-between p-2 ${!useWindowFrame && platform === 'darwin' ? 'ml-15' : ''}`}
           >
-            <div className="flex ml-1">
-              <MihomoIcon className="h-8 leading-8 text-lg mx-px" />
+            <div className="flex ml-1 min-w-0 items-center gap-2">
               <h3 className="text-lg font-bold leading-8">Clash Lite</h3>
+              <UpdaterButton />
             </div>
-            <UpdaterButton />
-            <Button
-              size="sm"
-              className="app-nodrag"
-              isIconOnly
-              color={location.pathname.includes('/settings') ? 'primary' : 'default'}
-              variant={location.pathname.includes('/settings') ? 'solid' : 'light'}
-              onPress={() => {
-                navigate('/settings')
-              }}
-            >
-              <IoSettings className="text-[20px]" />
-            </Button>
+            <div className="flex items-center gap-1 app-nodrag">
+              <Button
+                size="sm"
+                className="app-nodrag"
+                isIconOnly
+                color={location.pathname.includes('/settings') ? 'primary' : 'default'}
+                variant={location.pathname.includes('/settings') ? 'solid' : 'light'}
+                onPress={() => {
+                  navigate('/settings')
+                }}
+              >
+                <IoSettings className="text-[20px]" />
+              </Button>
+            </div>
           </div>
         </div>
         <div className="mt-2 mx-2">

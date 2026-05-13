@@ -3,7 +3,6 @@ import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { checkUpdate } from '@renderer/utils/ipc'
 import React, { lazy, Suspense, useState } from 'react'
 import useSWR from 'swr'
-import { platform } from '@renderer/utils/init'
 import { MdNewReleases } from 'react-icons/md'
 import { useTranslation } from 'react-i18next'
 
@@ -17,7 +16,7 @@ const UpdaterButton: React.FC<Props> = (props) => {
   const { t } = useTranslation()
   const { appConfig } = useAppConfig()
   const { iconOnly } = props
-  const { autoCheckUpdate, useWindowFrame = false } = appConfig || {}
+  const { autoCheckUpdate } = appConfig || {}
   const [openModal, setOpenModal] = useState(false)
   const { data: latest } = useSWR(
     autoCheckUpdate ? 'checkUpdate' : undefined,
@@ -56,14 +55,14 @@ const UpdaterButton: React.FC<Props> = (props) => {
         </Button>
       ) : (
         <Button
-          className={`fixed left-[85px] app-nodrag ${!useWindowFrame && platform === 'darwin' ? 'ml-[60px]' : ''}`}
+          className="app-nodrag h-7 min-w-0 px-2.5 text-sm font-semibold leading-none"
           color="danger"
           size="sm"
           onPress={() => {
             setOpenModal(true)
           }}
         >
-          {t('common.updater.update')}
+          <span className="relative -top-px leading-none">{t('common.updater.update')}</span>
         </Button>
       )}
     </>
