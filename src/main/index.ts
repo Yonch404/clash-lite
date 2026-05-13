@@ -18,8 +18,7 @@ import { createTray } from './resolve/tray'
 import { init, initBasic, safeShowErrorBox } from './utils/init'
 import { initProfileUpdater } from './core/profileUpdater'
 import { startMonitor } from './resolve/trafficMonitor'
-import { showFloatingWindow } from './resolve/floatingWindow'
-import { logger, createLogger } from './utils/logger'
+import { createLogger } from './utils/logger'
 import {
   createWindow,
   mainWindow,
@@ -227,7 +226,7 @@ const initPromise = (async () => {
 app.whenReady().then(async () => {
   electronApp.setAppUserModelId('lite.clash.app')
 
-  const appConfig = await initPromise
+  await initPromise
   const canContinueStartup = await ensureAdminForEnabledTunOnWindows()
   if (!canContinueStartup) return
 
@@ -264,24 +263,9 @@ app.whenReady().then(async () => {
 
   await createWindowPromise
 
-  const { showFloatingWindow: showFloating = false, disableTray = false } = appConfig
   const uiTasks: Promise<void>[] = []
 
-  if (showFloating) {
-    uiTasks.push(
-      (async () => {
-        try {
-          await showFloatingWindow()
-        } catch (error) {
-          await logger.error('Failed to create floating window on startup', error)
-        }
-      })()
-    )
-  }
-
-  if (!disableTray) {
-    uiTasks.push(createTray())
-  }
+  uiTasks.push(createTray())
 
   await Promise.all(uiTasks)
   void runtimeInitPromise

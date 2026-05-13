@@ -5,14 +5,10 @@ import { BiCopy } from 'react-icons/bi'
 import useSWR from 'swr'
 import {
   checkAutoRun,
-  closeFloatingWindow,
-  closeTrayIcon,
   copyEnv,
   disableAutoRun,
   enableAutoRun,
   relaunchApp,
-  showFloatingWindow,
-  showTrayIcon,
   startMonitor
 } from '@renderer/utils/ipc'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
@@ -37,14 +33,7 @@ const GeneralConfig: React.FC = () => {
     silentStart = false,
     useDockIcon = true,
     showTraffic = false,
-    proxyInTray = true,
-    showCurrentProxyInTray = false,
-    trayProxyGroupStyle = 'default',
-    disableTray = false,
     disableAnimations = false,
-    showFloatingWindow: showFloating = false,
-    spinFloatingIcon = true,
-    floatingWindowCompatMode = true,
     disableHardwareAcceleration = false,
     useWindowFrame = false,
     autoQuitWithoutCore = false,
@@ -232,117 +221,17 @@ const GeneralConfig: React.FC = () => {
             <SelectItem key="nushell">Nushell</SelectItem>
           </Select>
         </SettingItem>
-        <SettingItem title={t('settings.showFloatingWindow')} divider>
-          <Switch
-            size="sm"
-            isSelected={showFloating}
-            onValueChange={async (v) => {
-              await patchAppConfig({ showFloatingWindow: v })
-              if (v) {
-                showFloatingWindow()
-              } else {
-                closeFloatingWindow()
-              }
-            }}
-          />
-        </SettingItem>
-
-        {showFloating && (
-          <>
-            <SettingItem title={t('settings.spinFloatingIcon')} divider>
-              <Switch
-                size="sm"
-                isSelected={spinFloatingIcon}
-                onValueChange={async (v) => {
-                  await patchAppConfig({ spinFloatingIcon: v })
-                  window.electron.ipcRenderer.send('updateFloatingWindow')
-                }}
-              />
-            </SettingItem>
-            <SettingItem title={t('settings.floatingWindowCompatMode')} divider>
-              <div className="flex items-center gap-2">
-                <Switch
-                  size="sm"
-                  isSelected={floatingWindowCompatMode}
-                  onValueChange={async (v) => {
-                    await patchAppConfig({ floatingWindowCompatMode: v })
-                    closeFloatingWindow()
-                    setTimeout(() => {
-                      showFloatingWindow()
-                    }, 100)
-                  }}
-                />
-                <Tooltip content={t('settings.floatingWindowCompatModeTooltip')}>
-                  <IoIosHelpCircle className="text-default-500 cursor-help" />
-                </Tooltip>
-              </div>
-            </SettingItem>
-          </>
-        )}
-        <SettingItem title={t('settings.disableTray')} divider>
-          <Switch
-            size="sm"
-            isSelected={disableTray}
-            onValueChange={async (v) => {
-              await patchAppConfig({ disableTray: v })
-              if (v) {
-                closeTrayIcon()
-              } else {
-                showTrayIcon()
-              }
-            }}
-          />
-        </SettingItem>
-        {!disableTray && platform !== 'linux' && (
-          <>
-            <SettingItem title={t('settings.proxyInTray')} divider>
-              <Switch
-                size="sm"
-                isSelected={proxyInTray}
-                onValueChange={async (v) => {
-                  await patchAppConfig({ proxyInTray: v })
-                }}
-              />
-            </SettingItem>
-            {proxyInTray && (
-              <>
-                <SettingItem title={t('settings.showCurrentProxyInTray')} divider>
-                  <Switch
-                    size="sm"
-                    isSelected={showCurrentProxyInTray}
-                    onValueChange={async (v) => {
-                      await patchAppConfig({ showCurrentProxyInTray: v })
-                    }}
-                  />
-                </SettingItem>
-                <SettingItem title={t('settings.trayProxyGroupStyle')} divider>
-                  <Tabs
-                    size="sm"
-                    color="primary"
-                    selectedKey={trayProxyGroupStyle}
-                    onSelectionChange={(key) => {
-                      patchAppConfig({ trayProxyGroupStyle: key as 'default' | 'submenu' })
-                    }}
-                  >
-                    <Tab key="default" title={t('settings.trayProxyGroupStyleDefault')} />
-                    <Tab key="submenu" title={t('settings.trayProxyGroupStyleSubmenu')} />
-                  </Tabs>
-                </SettingItem>
-              </>
-            )}
-            {platform === 'win32' && (
-              <SettingItem title={t('settings.showTraffic', { context: 'windows' })} divider>
-                <Switch
-                  size="sm"
-                  isSelected={showTraffic}
-                  onValueChange={async (v) => {
-                    await patchAppConfig({ showTraffic: v })
-                    await startMonitor()
-                  }}
-                />
-              </SettingItem>
-            )}
-          </>
+        {platform === 'win32' && (
+          <SettingItem title={t('settings.showTraffic', { context: 'windows' })} divider>
+            <Switch
+              size="sm"
+              isSelected={showTraffic}
+              onValueChange={async (v) => {
+                await patchAppConfig({ showTraffic: v })
+                await startMonitor()
+              }}
+            />
+          </SettingItem>
         )}
         {platform === 'darwin' && (
           <>

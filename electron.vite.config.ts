@@ -62,8 +62,7 @@ export default defineConfig({
       sourcemap: false,
       rollupOptions: {
         input: {
-          index: resolve('src/renderer/index.html'),
-          floating: resolve('src/renderer/floating.html')
+          index: resolve('src/renderer/index.html')
         }
       }
     },

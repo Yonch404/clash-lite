@@ -9,114 +9,19 @@ import {
   patchControledMihomoConfig
 } from '../config'
 import appIcon from '../../../resources/app-icon.png?asset'
-import {
-  mihomoChangeProxy,
-  mihomoCloseAllConnections,
-  mihomoGroupDelay,
-  mihomoGroups,
-  patchMihomoConfig
-} from '../core/mihomoApi'
+import { patchMihomoConfig } from '../core/mihomoApi'
 import { mainWindow, showMainWindow, triggerMainWindow } from '../window'
 import { dataDir, logDir, mihomoCoreDir, mihomoWorkDir } from '../utils/dirs'
 import { triggerSysProxy } from '../sys/sysproxy'
 import { quitWithoutCore } from '../core/manager'
-import { trayLogger } from '../utils/logger'
-import { floatingWindow, triggerFloatingWindow } from './floatingWindow'
 
 export let tray: Tray | null = null
 const trayIconSize = 16
 
 export const buildContextMenu = async (): Promise<Menu> => {
-  // 添加调试日志
-  await trayLogger.debug('Current translation for tray.showWindow', t('tray.showWindow'))
-  await trayLogger.debug(
-    'Current translation for tray.hideFloatingWindow',
-    t('tray.hideFloatingWindow')
-  )
-  await trayLogger.debug(
-    'Current translation for tray.showFloatingWindow',
-    t('tray.showFloatingWindow')
-  )
-
   const { mode } = await getControledMihomoConfig()
-  const {
-    sysProxy,
-    envType = process.platform === 'win32' ? ['powershell'] : ['bash'],
-    proxyInTray = true,
-    showCurrentProxyInTray = false,
-    trayProxyGroupStyle = 'default'
-  } = await getAppConfig()
-  let groupsMenu: Electron.MenuItemConstructorOptions[] = []
-  if (proxyInTray && process.platform !== 'linux') {
-    try {
-      const groups = await mihomoGroups()
-      const groupItems: Electron.MenuItemConstructorOptions[] = groups.map((group) => {
-        const groupLabel = showCurrentProxyInTray ? `${group.name} | ${group.now}` : group.name
-
-        return {
-          id: group.name,
-          label: groupLabel,
-          type: 'submenu' as const,
-          submenu: [
-            {
-              id: `${group.name}-delay-test`,
-              label: t('tray.delayTest'),
-              type: 'normal' as const,
-              click: async (): Promise<void> => {
-                try {
-                  await mihomoGroupDelay(group.name, group.testUrl)
-                  mainWindow?.webContents.send('groupsUpdated')
-                } catch (error) {
-                  await trayLogger.error(`Failed to test proxy group delay: ${group.name}`, error)
-                }
-              }
-            },
-            { type: 'separator' as const },
-            ...group.all.map((proxy) => {
-              const delay = proxy.history.length
-                ? proxy.history[proxy.history.length - 1].delay
-                : -1
-              let displayDelay = `(${delay}ms)`
-              if (delay === -1) {
-                displayDelay = ''
-              }
-              if (delay === 0) {
-                displayDelay = '(Timeout)'
-              }
-              return {
-                id: proxy.name,
-                label: `${proxy.name}   ${displayDelay}`,
-                type: 'radio' as const,
-                checked: proxy.name === group.now,
-                click: async (): Promise<void> => {
-                  await mihomoChangeProxy(group.name, proxy.name)
-                  await mihomoCloseAllConnections()
-                }
-              }
-            })
-          ]
-        }
-      })
-
-      if (trayProxyGroupStyle === 'submenu') {
-        groupsMenu = [
-          { type: 'separator' },
-          {
-            id: 'proxy-groups',
-            label: t('tray.proxyGroups'),
-            type: 'submenu',
-            submenu: groupItems
-          }
-        ]
-      } else {
-        groupsMenu = groupItems
-        groupsMenu.unshift({ type: 'separator' })
-      }
-    } catch {
-      // ignore
-      // 避免出错时无法创建托盘菜单
-    }
-  }
+  const { sysProxy, envType = process.platform === 'win32' ? ['powershell'] : ['bash'] } =
+    await getAppConfig()
   const { current, items = [] } = await getProfileConfig()
 
   const contextMenu = [
@@ -126,16 +31,6 @@ export const buildContextMenu = async (): Promise<Menu> => {
       type: 'normal',
       click: (): void => {
         showMainWindow()
-      }
-    },
-    {
-      id: 'show-floating',
-      label: floatingWindow?.isVisible()
-        ? t('tray.hideFloatingWindow')
-        : t('tray.showFloatingWindow'),
-      type: 'normal',
-      click: async (): Promise<void> => {
-        await triggerFloatingWindow()
       }
     },
     {
@@ -191,7 +86,6 @@ export const buildContextMenu = async (): Promise<Menu> => {
           await triggerSysProxy(enable)
           await patchAppConfig({ sysProxy: { enable } })
           mainWindow?.webContents.send('appConfigUpdated')
-          floatingWindow?.webContents.send('appConfigUpdated')
         } catch {
           // ignore
         } finally {
@@ -200,8 +94,6 @@ export const buildContextMenu = async (): Promise<Menu> => {
         }
       }
     },
-    ...groupsMenu,
-    { type: 'separator' },
     {
       type: 'submenu',
       label: t('tray.profiles'),
@@ -389,19 +281,6 @@ export async function copyEnv(
       break
     }
   }
-}
-
-export async function showTrayIcon(): Promise<void> {
-  if (!tray) {
-    await createTray()
-  }
-}
-
-export async function closeTrayIcon(): Promise<void> {
-  if (tray) {
-    tray.destroy()
-  }
-  tray = null
 }
 
 export async function showDockIcon(): Promise<void> {

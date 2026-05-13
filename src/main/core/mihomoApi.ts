@@ -4,7 +4,6 @@ import { getAppConfig, getControledMihomoConfig } from '../config'
 import { mainWindow } from '../window'
 import { tray } from '../resolve/tray'
 import { calcTraffic } from '../utils/calc'
-import { floatingWindow } from '../resolve/floatingWindow'
 import { createLogger } from '../utils/logger'
 import { mihomoWorkConfigPath } from '../utils/dirs'
 import { generateProfile, getRuntimeConfig } from './factory'
@@ -212,7 +211,6 @@ const mihomoTraffic = async (): Promise<void> => {
             `${calcTraffic(json.down)}/s`.padStart(9)
         )
       }
-      floatingWindow?.webContents.send('mihomoTraffic', json)
     } catch {
       // ignore
     }

@@ -32,7 +32,6 @@ const SysproxySwitcher: React.FC<Props> = (props) => {
       await patchAppConfig({ sysProxy: { enable } })
       await triggerSysProxy(enable)
 
-      window.electron.ipcRenderer.send('updateFloatingWindow')
       window.electron.ipcRenderer.send('updateTrayMenu')
       await updateTrayIcon()
     } catch (e) {

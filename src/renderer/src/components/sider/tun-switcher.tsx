@@ -35,7 +35,6 @@ const TunSwitcher: React.FC<Props> = (props) => {
         if (!confirmed) return
 
         await patchControledMihomoConfig({ tun: { enable } })
-        window.electron.ipcRenderer.send('updateFloatingWindow')
         window.electron.ipcRenderer.send('updateTrayMenu')
         await window.electron.ipcRenderer.invoke('updateTrayIcon')
         await restartAsAdmin()
@@ -44,7 +43,6 @@ const TunSwitcher: React.FC<Props> = (props) => {
     }
 
     await patchControledMihomoConfig({ tun: { enable } })
-    window.electron.ipcRenderer.send('updateFloatingWindow')
     window.electron.ipcRenderer.send('updateTrayMenu')
     await window.electron.ipcRenderer.invoke('updateTrayIcon')
   }

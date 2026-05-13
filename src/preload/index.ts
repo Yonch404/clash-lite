@@ -70,17 +70,11 @@ const validInvokeChannels = [
   'importLocalBackup',
   // Theme
   'applyTheme',
-  // Tray
-  'showTrayIcon',
-  'closeTrayIcon',
   'updateTrayIcon',
   // Window
   'showMainWindow',
   'closeMainWindow',
   'triggerMainWindow',
-  'showFloatingWindow',
-  'closeFloatingWindow',
-  'showContextMenu',
   'setTitleBarOverlay',
   'setAlwaysOnTop',
   'isAlwaysOnTop',
@@ -110,7 +104,7 @@ const validListenChannels = [
 ] as const
 
 // 允许的 send channels 白名单
-const validSendChannels = ['updateTrayMenu', 'updateFloatingWindow'] as const
+const validSendChannels = ['updateTrayMenu'] as const
 
 type InvokeChannel = (typeof validInvokeChannels)[number]
 type ListenChannel = (typeof validListenChannels)[number]

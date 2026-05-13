@@ -56,11 +56,10 @@ import {
 import { getRuntimeConfig, getRuntimeConfigStr } from '../core/factory'
 import { exportLocalBackup, importLocalBackup } from '../resolve/backup'
 import { getInterfaces } from '../sys/interface'
-import { closeTrayIcon, copyEnv, showTrayIcon, updateTrayIcon } from '../resolve/tray'
+import { copyEnv, updateTrayIcon } from '../resolve/tray'
 import { closeMainWindow, mainWindow, showMainWindow, triggerMainWindow } from '../window'
 import { applyTheme } from '../resolve/theme'
 import { startMonitor } from '../resolve/trafficMonitor'
-import { closeFloatingWindow, showContextMenu, showFloatingWindow } from '../resolve/floatingWindow'
 import { addProfileUpdater, removeProfileUpdater } from '../core/profileUpdater'
 import { getImageDataURL } from './image'
 import { get as httpGet } from './chromeRequest'
@@ -184,14 +183,7 @@ const asyncHandlers: Record<string, AsyncFn> = {
   importLocalBackup,
   // Theme
   applyTheme,
-  // Tray
-  showTrayIcon,
-  closeTrayIcon,
   updateTrayIcon,
-  // Floating Window
-  showFloatingWindow,
-  closeFloatingWindow,
-  showContextMenu,
   // Misc
   fetchIPInfo,
   measureLatency,

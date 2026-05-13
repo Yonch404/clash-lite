@@ -218,18 +218,12 @@ interface IAppConfig {
   connectionTableSortColumn?: string
   connectionTableSortDirection?: 'asc' | 'desc'
   displayAppName?: boolean
-  spinFloatingIcon?: boolean
-  disableTray?: boolean
-  showFloatingWindow?: boolean
-  floatingWindowCompatMode?: boolean
   disableHardwareAcceleration?: boolean
   autoQuitWithoutCore?: boolean
   autoQuitWithoutCoreDelay?: number
   mihomoCpuPriority?: Priority
   diffWorkDir?: boolean
   useWindowFrame: boolean
-  proxyInTray: boolean
-  showCurrentProxyInTray: boolean
   appTheme: AppTheme
   autoCheckUpdate: boolean
   silentStart: boolean
@@ -244,7 +238,6 @@ interface IAppConfig {
   subscriptionTimeout?: number
   useDockIcon?: boolean
   showTraffic?: boolean
-  trayProxyGroupStyle?: 'default' | 'submenu'
   disableAnimations?: boolean
   language?: 'zh-CN' | 'zh-TW' | 'en-US' | 'ru-RU' | 'fa-IR'
   triggerMainWindowBehavior?: 'show' | 'toggle'

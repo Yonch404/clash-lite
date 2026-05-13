@@ -2,9 +2,6 @@ export const defaultConfig: IAppConfig = {
   silentStart: false,
   appTheme: 'system',
   useWindowFrame: false,
-  proxyInTray: true,
-  showCurrentProxyInTray: false,
-  trayProxyGroupStyle: 'default',
   maxLogDays: 3,
   maxLogFileSize: 10,
   proxyCols: 'auto',
@@ -14,7 +11,6 @@ export const defaultConfig: IAppConfig = {
   autoCheckUpdate: true,
   subscriptionTimeout: 30000,
   networkLatencyTargets: [],
-  floatingWindowCompatMode: true,
   disableHardwareAcceleration: false,
   sysProxy: { enable: true, mode: 'manual' },
   triggerMainWindowBehavior: 'show'

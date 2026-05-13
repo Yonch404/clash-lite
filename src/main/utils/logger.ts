@@ -74,7 +74,6 @@ class Logger {
     this.logToConsole('error', message, error)
   }
 
-  // 兼容原有的 logFloatingWindow 函数签名
   async log(message: string, error?: unknown): Promise<void> {
     if (error) {
       await this.error(message, error)
@@ -92,8 +91,6 @@ export const createLogger = (moduleName: string): Logger => {
 // 统一的应用日志实例 - 所有模块共享同一个日志文件
 export const appLogger = createLogger('app')
 
-// 为了保持向后兼容性，创建各模块的日志实例（都指向同一个应用日志）
-export const floatingWindowLogger = createLogger('floating-window')
 export const coreLogger = createLogger('mihomo-core')
 export const apiLogger = createLogger('mihomo-api')
 export const configLogger = createLogger('config')

@@ -81,17 +81,11 @@ interface IpcApi {
   exportLocalBackup: () => Promise<boolean>
   importLocalBackup: () => Promise<boolean>
   // Theme
-  // Tray
-  showTrayIcon: () => Promise<void>
-  closeTrayIcon: () => Promise<void>
   updateTrayIcon: () => Promise<void>
   // Window
   showMainWindow: () => Promise<void>
   closeMainWindow: () => Promise<void>
   triggerMainWindow: () => Promise<void>
-  showFloatingWindow: () => Promise<void>
-  closeFloatingWindow: () => Promise<void>
-  showContextMenu: () => Promise<void>
   setAlwaysOnTop: (alwaysOnTop: boolean) => Promise<void>
   isAlwaysOnTop: () => Promise<boolean>
   openDevTools: () => Promise<void>
@@ -180,17 +174,11 @@ export const {
   exportLocalBackup,
   importLocalBackup,
   // Theme
-  // Tray
-  showTrayIcon,
-  closeTrayIcon,
   updateTrayIcon,
   // Window
   showMainWindow,
   closeMainWindow,
   triggerMainWindow,
-  showFloatingWindow,
-  closeFloatingWindow,
-  showContextMenu,
   setAlwaysOnTop,
   isAlwaysOnTop,
   openDevTools,

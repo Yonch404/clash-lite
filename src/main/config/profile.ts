@@ -321,7 +321,7 @@ export async function createProfile(item: Partial<IProfileItem>): Promise<IProfi
     const baseOptions: Omit<FetchOptions, 'useProxy' | 'timeout'> = {
       url: profileUrl,
       mixedPort,
-      userAgent: item.userAgent || userAgent || `clash-lite/v${app.getVersion()} (clash.meta)`,
+      userAgent: item.userAgent || userAgent || `clash-lite/v${app.getVersion()}`,
       authToken: item.authToken
     }
 
