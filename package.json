@@ -52,8 +52,10 @@
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
     "@electron-toolkit/tsconfig": "^2.0.0",
-    "@heroui/react": "^2.8.10",
-    "@tailwindcss/vite": "^4.2.4",
+    "@heroui/react": "2.8.10",
+    "@heroui/theme": "2.4.26",
+    "@react-types/shared": "3.34.0",
+    "@tailwindcss/vite": "4.3.0",
     "@types/adm-zip": "^0.5.8",
     "@types/crypto-js": "^4.2.2",
     "@types/express": "^5.0.6",
@@ -80,6 +82,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "framer-motion": "12.38.0",
     "meta-json-schema": "^1.19.24",
+    "monaco-editor": "0.52.2",
     "monaco-yaml": "^5.5.0",
     "nanoid": "^5.1.9",
     "next-themes": "^0.4.6",
@@ -96,7 +99,7 @@
     "react-router-dom": "^7.14.2",
     "react-virtuoso": "^4.18.7",
     "swr": "^2.4.1",
-    "tailwindcss": "^4.2.4",
+    "tailwindcss": "4.3.0",
     "terser": "^5.47.1",
     "tsx": "^4.21.0",
     "types-pac": "^1.0.3",
@@ -104,7 +107,7 @@
     "vite": "^7.3.3",
     "vite-plugin-monaco-editor": "^1.1.0"
   },
-  "packageManager": "pnpm@10.27.0",
+  "packageManager": "pnpm@11.1.1",
   "pnpm": {
     "onlyBuiltDependencies": [
       "@heroui/shared-utils",
