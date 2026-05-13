@@ -6,6 +6,24 @@ import { app, powerMonitor } from 'electron'
 import { stopCore, cleanupCoreWatcher } from './core/manager'
 import { triggerSysProxy, disableSysProxySync } from './sys/sysproxy'
 import { exePath } from './utils/dirs'
+import { abortPendingRequests } from './utils/chromeRequest'
+import { createLogger } from './utils/logger'
+
+const lifecycleLogger = createLogger('lifecycle')
+const shutdownNetworkErrorCodes = new Set([
+  'ECONNRESET',
+  'ECONNABORTED',
+  'ECANCELED',
+  'ERR_STREAM_PREMATURE_CLOSE'
+])
+
+function isShutdownNetworkError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code
+  if (code && shutdownNetworkErrorCodes.has(code)) return true
+
+  const message = error instanceof Error ? error.message : String(error)
+  return /(?:read )?ECONNRESET|socket hang up|premature close/i.test(message)
+}
 
 export function customRelaunch(): void {
   const script = `while kill -0 ${process.pid} 2>/dev/null; do
@@ -59,6 +77,37 @@ export function setupPlatformSpecifics(): void {
 export function setupAppLifecycle(): void {
   let sysProxyDisabled = false
   let isQuitting = false
+  let shutdownErrorHandlersInstalled = false
+
+  const handleShutdownUncaughtException = (error: Error): void => {
+    if (isShutdownNetworkError(error)) {
+      void lifecycleLogger.debug('Ignored network reset during shutdown', error)
+      return
+    }
+
+    process.removeListener('uncaughtException', handleShutdownUncaughtException)
+    process.removeListener('unhandledRejection', handleShutdownUnhandledRejection)
+    throw error
+  }
+
+  const handleShutdownUnhandledRejection = (reason: unknown): void => {
+    if (isShutdownNetworkError(reason)) {
+      void lifecycleLogger.debug('Ignored rejected network request during shutdown', reason)
+      return
+    }
+
+    process.removeListener('uncaughtException', handleShutdownUncaughtException)
+    process.removeListener('unhandledRejection', handleShutdownUnhandledRejection)
+    throw reason instanceof Error ? reason : new Error(String(reason))
+  }
+
+  const installShutdownErrorHandlers = (): void => {
+    if (shutdownErrorHandlersInstalled) return
+
+    shutdownErrorHandlersInstalled = true
+    process.on('uncaughtException', handleShutdownUncaughtException)
+    process.on('unhandledRejection', handleShutdownUnhandledRejection)
+  }
 
   const withTimeout = async (promise: Promise<void>, timeout: number): Promise<void> => {
     let timeoutId: NodeJS.Timeout | null = null
@@ -78,8 +127,10 @@ export function setupAppLifecycle(): void {
   const cleanupBeforeExit = async (): Promise<void> => {
     if (isQuitting) return
     isQuitting = true
+    installShutdownErrorHandlers()
 
     cleanupCoreWatcher()
+    abortPendingRequests()
 
     if (process.platform !== 'darwin') {
       disableSysProxySync()

@@ -50,6 +50,49 @@ type HttpProxyOptions = {
 const gunzip = promisify(zlib.gunzip)
 const inflate = promisify(zlib.inflate)
 const brotliDecompress = promisify(zlib.brotliDecompress)
+const activeRequests = new Set<http.ClientRequest>()
+const activeSockets = new Set<net.Socket>()
+
+function trackRequest(req: http.ClientRequest): void {
+  if (activeRequests.has(req)) return
+
+  activeRequests.add(req)
+  req.once('close', () => {
+    activeRequests.delete(req)
+  })
+  req.once('socket', (socket) => {
+    trackSocket(socket)
+  })
+}
+
+function trackSocket(socket: net.Socket): void {
+  if (activeSockets.has(socket)) return
+
+  activeSockets.add(socket)
+
+  const onSocketError = (): void => {
+    // Active requests still reject through their own handlers; this keeps late shutdown resets contained.
+  }
+  const onSocketClose = (): void => {
+    activeSockets.delete(socket)
+    socket.off('error', onSocketError)
+  }
+
+  socket.on('error', onSocketError)
+  socket.once('close', onSocketClose)
+}
+
+export function abortPendingRequests(): void {
+  for (const req of Array.from(activeRequests)) {
+    req.destroy()
+  }
+  for (const socket of Array.from(activeSockets)) {
+    socket.destroy()
+  }
+
+  activeRequests.clear()
+  activeSockets.clear()
+}
 
 /**
  * Make HTTP requests through Node's TLS stack with Clash Lite's bundled Chrome CA bundle.
@@ -247,9 +290,11 @@ function createProxyTlsSocket(
       path: connectHost,
       headers: { Host: connectHost }
     })
+    trackRequest(connectReq)
 
     const cleanup = (): void => {
       if (timeoutId) clearTimeout(timeoutId)
+      activeRequests.delete(connectReq)
     }
     const fail = (error: Error): void => {
       if (settled) return
@@ -290,6 +335,7 @@ function createProxyTlsSocket(
         ca,
         rejectUnauthorized: true
       })
+      trackSocket(tlsSocket)
 
       const onSecureConnect = (): void => {
         tlsSocket?.off('error', onTlsError)
@@ -322,6 +368,7 @@ function sendRequest(
 
     const cleanup = (): void => {
       if (timeoutId) clearTimeout(timeoutId)
+      if (req) activeRequests.delete(req)
     }
     const fail = (error: Error): void => {
       if (settled) return
@@ -352,6 +399,10 @@ function sendRequest(
           .catch((error: unknown) => {
             fail(error instanceof Error ? error : new Error(String(error)))
           })
+      })
+      trackRequest(req)
+      req.once('socket', (socket) => {
+        socket.once('error', (error) => fail(error))
       })
     } catch (error) {
       fail(error instanceof Error ? error : new Error(String(error)))
