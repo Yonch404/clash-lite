@@ -21,6 +21,41 @@ import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-c
 import { useTranslation } from 'react-i18next'
 
 const GROUP_EXPAND_STATE_KEY = 'proxy_group_expand_state'
+const EMPTY_GROUPS: IMihomoMixedGroup[] = []
+
+function readGroupExpandState(groups: IMihomoMixedGroup[]): boolean[] {
+  if (groups.length === 0) return []
+
+  try {
+    const savedState = localStorage.getItem(GROUP_EXPAND_STATE_KEY)
+    if (!savedState) return Array(groups.length).fill(false)
+
+    const parsed = JSON.parse(savedState)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const savedMap = parsed as Record<string, boolean>
+      return groups.map((group) => Boolean(savedMap[group.name]))
+    }
+  } catch (error) {
+    console.error('Failed to load group expand state:', error)
+  }
+
+  return Array(groups.length).fill(false)
+}
+
+function saveGroupExpandState(groups: IMihomoMixedGroup[], isOpen: boolean[]): void {
+  if (groups.length === 0 || groups.length !== isOpen.length) return
+
+  try {
+    localStorage.setItem(
+      GROUP_EXPAND_STATE_KEY,
+      JSON.stringify(
+        Object.fromEntries(groups.map((group, index) => [group.name, Boolean(isOpen[index])]))
+      )
+    )
+  } catch (error) {
+    console.error('Failed to save group expand state:', error)
+  }
+}
 
 // 自定义 hook 用于管理展开状态
 const useProxyState = (
@@ -31,45 +66,22 @@ const useProxyState = (
   setIsOpen: React.Dispatch<React.SetStateAction<boolean[]>>
 } => {
   const virtuosoRef = useRef<GroupedVirtuosoHandle | null>(null)
+  const groupNamesKey = useMemo(() => groups.map((group) => group.name).join('\n'), [groups])
+  const groupsRef = useRef(groups)
+  groupsRef.current = groups
 
   // 初始化展开状态
-  const [isOpen, setIsOpen] = useState<boolean[]>(() => {
-    try {
-      const savedState = localStorage.getItem(GROUP_EXPAND_STATE_KEY)
-      if (savedState) {
-        const parsed = JSON.parse(savedState)
-        if (Array.isArray(parsed)) {
-          return parsed
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load group expand state:', error)
-    }
-    return []
-  })
+  const [isOpen, setIsOpen] = useState<boolean[]>(() => readGroupExpandState(groups))
 
-  // 同步展开状态数组长度与 groups 长度
+  // 同步展开状态与当前代理组名称，避免不同订阅的展开状态按下标错套
   useEffect(() => {
-    if (groups.length !== isOpen.length) {
-      setIsOpen((prev) => {
-        if (groups.length > prev.length) {
-          return [...prev, ...Array(groups.length - prev.length).fill(false)]
-        }
-        return prev.slice(0, groups.length)
-      })
-    }
-  }, [groups.length, isOpen.length, setIsOpen])
+    setIsOpen(readGroupExpandState(groupsRef.current))
+  }, [groupNamesKey])
 
   // 保存展开状态
   useEffect(() => {
-    if (isOpen.length > 0) {
-      try {
-        localStorage.setItem(GROUP_EXPAND_STATE_KEY, JSON.stringify(isOpen))
-      } catch (error) {
-        console.error('Failed to save group expand state:', error)
-      }
-    }
-  }, [isOpen])
+    saveGroupExpandState(groupsRef.current, isOpen)
+  }, [groupNamesKey, isOpen])
 
   return {
     virtuosoRef,
@@ -82,7 +94,14 @@ const Proxies: React.FC = () => {
   const { t } = useTranslation()
   const { controledMihomoConfig } = useControledMihomoConfig()
   const { mode = 'rule' } = controledMihomoConfig || {}
-  const { groups = [], mutate } = useGroups()
+  const { groups, mutate } = useGroups()
+  const proxyGroups = groups ?? EMPTY_GROUPS
+  const groupsReady = groups !== undefined
+  const groupCount = proxyGroups.length
+  const groupNamesKey = useMemo(
+    () => proxyGroups.map((group) => group.name).join('\n'),
+    [proxyGroups]
+  )
   const { appConfig, patchAppConfig } = useAppConfig()
   const {
     proxyDisplayMode = 'simple',
@@ -91,16 +110,15 @@ const Proxies: React.FC = () => {
   } = appConfig || {}
 
   const [cols, setCols] = useState(1)
-  const { virtuosoRef, isOpen, setIsOpen } = useProxyState(groups)
-  const [delaying, setDelaying] = useState(Array(groups.length).fill(false))
-  const [searchValue, setSearchValue] = useState(Array(groups.length).fill(''))
+  const { virtuosoRef, isOpen, setIsOpen } = useProxyState(proxyGroups)
+  const [delaying, setDelaying] = useState(Array(groupCount).fill(false))
+  const [searchValue, setSearchValue] = useState(Array(groupCount).fill(''))
 
   // searchValue 初始化
   useEffect(() => {
-    if (groups.length !== searchValue.length) {
-      setSearchValue(Array(groups.length).fill(''))
-    }
-  }, [groups.length, searchValue.length])
+    setSearchValue(Array(groupCount).fill(''))
+    setDelaying(Array(groupCount).fill(false))
+  }, [groupCount, groupNamesKey])
 
   // 代理列表保持内核返回的原始顺序
   const sortProxies = useCallback((proxies: (IMihomoProxy | IMihomoGroup)[]) => {
@@ -111,7 +129,7 @@ const Proxies: React.FC = () => {
     const groupCounts: number[] = []
     const allProxies: (IMihomoProxy | IMihomoGroup)[][] = []
 
-    groups.forEach((group, index) => {
+    proxyGroups.forEach((group, index) => {
       if (isOpen[index]) {
         const filtered = group.all.filter((proxy) => {
           if (!proxy) return false
@@ -130,7 +148,7 @@ const Proxies: React.FC = () => {
       }
     })
     return { groupCounts, allProxies }
-  }, [groups, isOpen, cols, searchValue, sortProxies])
+  }, [proxyGroups, isOpen, cols, searchValue, sortProxies])
 
   const onChangeProxy = useCallback(
     async (group: string, proxy: string): Promise<void> => {
@@ -167,7 +185,7 @@ const Proxies: React.FC = () => {
         for (const proxy of allProxies[index]) {
           const promise = Promise.resolve().then(async () => {
             try {
-              await mihomoProxyDelay(proxy.name, groups[index].testUrl)
+              await mihomoProxyDelay(proxy.name, proxyGroups[index].testUrl)
             } catch {
               // ignore
             } finally {
@@ -192,7 +210,7 @@ const Proxies: React.FC = () => {
         })
       }
     },
-    [allProxies, groups, delayTestConcurrency, mutate, setIsOpen]
+    [allProxies, proxyGroups, delayTestConcurrency, mutate, setIsOpen]
   )
 
   const calcCols = useCallback((): number => {
@@ -221,18 +239,18 @@ const Proxies: React.FC = () => {
   const renderGroupContent = useCallback(
     (index: number) => {
       if (
-        groups[index]?.icon &&
-        groups[index].icon.startsWith('http') &&
-        !localStorage.getItem(groups[index].icon)
+        proxyGroups[index]?.icon &&
+        proxyGroups[index].icon.startsWith('http') &&
+        !localStorage.getItem(proxyGroups[index].icon)
       ) {
-        getImageDataURL(groups[index].icon)
+        getImageDataURL(proxyGroups[index].icon)
           .then((dataURL) => {
-            localStorage.setItem(groups[index].icon, dataURL)
+            localStorage.setItem(proxyGroups[index].icon, dataURL)
             mutate()
           })
           .catch(() => {})
       }
-      return groups[index] ? (
+      return proxyGroups[index] ? (
         <div
           className={`w-full pt-2 ${index === groupCounts.length - 1 && !isOpen[index] ? 'pb-2' : ''} px-2`}
         >
@@ -252,36 +270,36 @@ const Proxies: React.FC = () => {
             <CardBody className="w-full">
               <div className="flex justify-between">
                 <div className="flex text-ellipsis overflow-hidden whitespace-nowrap">
-                  {groups[index].icon ? (
+                  {proxyGroups[index].icon ? (
                     <Avatar
                       className="bg-transparent mr-2"
                       size="sm"
                       radius="sm"
                       src={
-                        groups[index].icon.startsWith('<svg')
-                          ? `data:image/svg+xml;utf8,${groups[index].icon}`
-                          : localStorage.getItem(groups[index].icon) || groups[index].icon
+                        proxyGroups[index].icon.startsWith('<svg')
+                          ? `data:image/svg+xml;utf8,${proxyGroups[index].icon}`
+                          : localStorage.getItem(proxyGroups[index].icon) || proxyGroups[index].icon
                       }
                     />
                   ) : null}
                   <div className="text-ellipsis overflow-hidden whitespace-nowrap">
                     <div
-                      title={groups[index].name}
+                      title={proxyGroups[index].name}
                       className="inline flag-emoji h-8 text-md leading-8"
                     >
-                      {groups[index].name}
+                      {proxyGroups[index].name}
                     </div>
                     {proxyDisplayMode === 'full' && (
                       <div
-                        title={groups[index].type}
+                        title={proxyGroups[index].type}
                         className="inline ml-2 text-sm text-foreground-500"
                       >
-                        {groups[index].type}
+                        {proxyGroups[index].type}
                       </div>
                     )}
                     {proxyDisplayMode === 'full' && (
                       <div className="inline flag-emoji ml-2 text-sm text-foreground-500">
-                        {groups[index].now}
+                        {proxyGroups[index].now}
                       </div>
                     )}
                   </div>
@@ -289,7 +307,7 @@ const Proxies: React.FC = () => {
                 <div className="flex">
                   {proxyDisplayMode === 'full' && (
                     <Chip size="sm" className="my-1 mr-2">
-                      {groups[index].all.length}
+                      {proxyGroups[index].all.length}
                     </Chip>
                   )}
                   <CollapseInput
@@ -321,8 +339,9 @@ const Proxies: React.FC = () => {
                         i += groupCounts[j]
                       }
                       i += Math.floor(
-                        allProxies[index].findIndex((proxy) => proxy.name === groups[index].now) /
-                          cols
+                        allProxies[index].findIndex(
+                          (proxy) => proxy.name === proxyGroups[index].now
+                        ) / cols
                       )
                       virtuosoRef.current?.scrollToIndex({
                         index: Math.floor(i),
@@ -357,7 +376,7 @@ const Proxies: React.FC = () => {
       )
     },
     [
-      groups,
+      proxyGroups,
       groupCounts,
       isOpen,
       proxyDisplayMode,
@@ -397,10 +416,11 @@ const Proxies: React.FC = () => {
                 onProxyDelay={onProxyDelay}
                 onSelect={onChangeProxy}
                 proxy={allProxies[groupIndex][innerIndex * cols + i]}
-                group={groups[groupIndex]}
+                group={proxyGroups[groupIndex]}
                 proxyDisplayMode={proxyDisplayMode}
                 selected={
-                  allProxies[groupIndex][innerIndex * cols + i]?.name === groups[groupIndex].now
+                  allProxies[groupIndex][innerIndex * cols + i]?.name ===
+                  proxyGroups[groupIndex].now
                 }
                 isGroupTesting={delaying[groupIndex]}
               />
@@ -416,7 +436,7 @@ const Proxies: React.FC = () => {
       allProxies,
       proxyCols,
       cols,
-      groups,
+      proxyGroups,
       proxyDisplayMode,
       delaying,
       mutate,
@@ -457,12 +477,18 @@ const Proxies: React.FC = () => {
             <h2 className="text-foreground-500 text-[20px]">{t('proxies.mode.direct')}</h2>
           </div>
         </div>
+      ) : !groupsReady ||
+        isOpen.length !== groupCount ||
+        searchValue.length !== groupCount ||
+        delaying.length !== groupCount ? (
+        <div className="h-[calc(100vh-50px)]" />
       ) : (
         <div className="h-[calc(100vh-50px)]">
           <GroupedVirtuoso
             ref={virtuosoRef}
             groupCounts={groupCounts}
             defaultItemHeight={80}
+            initialItemCount={groupCount}
             increaseViewportBy={{ top: 150, bottom: 150 }}
             overscan={200}
             computeItemKey={(index, groupIndex) => `${groupIndex}-${index}`}
