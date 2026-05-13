@@ -15,6 +15,10 @@ const validInvokeChannels = [
   'mihomoProxyDelay',
   'mihomoGroupDelay',
   'patchMihomoConfig',
+  'subscribeMihomoLogs',
+  'unsubscribeMihomoLogs',
+  'subscribeMihomoConnections',
+  'unsubscribeMihomoConnections',
   // AutoRun
   'checkAutoRun',
   'enableAutoRun',
@@ -86,7 +90,6 @@ const validInvokeChannels = [
   'fetchIPInfo',
   'measureLatency',
   'getImageDataURL',
-  'getAppName',
   'changeLanguage'
 ] as const
 
@@ -112,6 +115,31 @@ type SendChannel = (typeof validSendChannels)[number]
 
 type IpcListener = (event: Electron.IpcRendererEvent, ...args: unknown[]) => void
 const listenerMap = new Map<ListenChannel, Set<IpcListener>>()
+const nativeListenerMap = new Map<ListenChannel, IpcListener>()
+
+function ensureNativeListener(channel: ListenChannel): void {
+  if (nativeListenerMap.has(channel)) return
+
+  const nativeListener: IpcListener = (event, ...args) => {
+    listenerMap.get(channel)?.forEach((listener) => {
+      listener(event, ...args)
+    })
+  }
+
+  nativeListenerMap.set(channel, nativeListener)
+  ipcRenderer.on(channel, nativeListener)
+}
+
+function removeNativeListenerIfUnused(channel: ListenChannel): void {
+  const listeners = listenerMap.get(channel)
+  if (listeners && listeners.size > 0) return
+
+  const nativeListener = nativeListenerMap.get(channel)
+  if (!nativeListener) return
+
+  ipcRenderer.removeListener(channel, nativeListener)
+  nativeListenerMap.delete(channel)
+}
 
 // 安全的 IPC API，只暴露白名单内的 channels
 const electronAPI = {
@@ -133,23 +161,24 @@ const electronAPI = {
           listenerMap.set(channel, new Set())
         }
         listenerMap.get(channel)?.add(listener)
-        ipcRenderer.on(channel, listener)
+        ensureNativeListener(channel)
       }
     },
     removeListener: (channel: ListenChannel, listener: IpcListener): void => {
       if (validListenChannels.includes(channel)) {
         listenerMap.get(channel)?.delete(listener)
-        ipcRenderer.removeListener(channel, listener)
+        removeNativeListenerIfUnused(channel)
       }
     },
     removeAllListeners: (channel: ListenChannel): void => {
       if (validListenChannels.includes(channel)) {
         const listeners = listenerMap.get(channel)
-        if (listeners) {
-          listeners.forEach((listener) => {
-            ipcRenderer.removeListener(channel, listener)
-          })
-          listeners.clear()
+        listeners?.clear()
+
+        const nativeListener = nativeListenerMap.get(channel)
+        if (nativeListener) {
+          ipcRenderer.removeListener(channel, nativeListener)
+          nativeListenerMap.delete(channel)
         }
       }
     }

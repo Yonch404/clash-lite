@@ -21,8 +21,44 @@ let mihomoLogsWs: WebSocket | null = null
 let logsRetry = 10
 let mihomoConnectionsWs: WebSocket | null = null
 let connectionsRetry = 10
+let logsSubscribed = false
+let connectionsSubscribed = false
+let logsStartToken = 0
+let connectionsStartToken = 0
 
 const MAX_RETRY = 10
+
+function isWebSocketActive(ws: WebSocket | null): boolean {
+  return ws?.readyState === WebSocket.OPEN || ws?.readyState === WebSocket.CONNECTING
+}
+
+function safelyDisposeWebSocket(ws: WebSocket | null): void {
+  if (!ws) return
+
+  ws.removeAllListeners()
+  ws.on('error', () => {
+    // Swallow late errors from sockets that are being disposed.
+  })
+
+  try {
+    if (ws.readyState === WebSocket.CONNECTING) {
+      ws.once('open', () => {
+        try {
+          ws.close()
+        } catch {
+          // ignore
+        }
+      })
+      return
+    }
+
+    if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CLOSING) {
+      ws.close()
+    }
+  } catch (error) {
+    mihomoApiLogger.debug('Ignored WebSocket dispose error', error)
+  }
+}
 
 export const getAxios = async (force: boolean = false): Promise<AxiosInstance> => {
   const dynamicIpcPath = getMihomoIpcPath()
@@ -280,35 +316,76 @@ const mihomoMemory = async (): Promise<void> => {
 }
 
 export const startMihomoLogs = async (): Promise<void> => {
+  if (isWebSocketActive(mihomoLogsWs)) return
   logsRetry = MAX_RETRY
+  logsStartToken++
   await mihomoLogs()
 }
 
 export const restartMihomoLogs = async (): Promise<void> => {
+  if (!logsSubscribed && !isWebSocketActive(mihomoLogsWs)) return
   stopMihomoLogs()
+  if (logsSubscribed) {
+    await startMihomoLogs()
+  }
+}
+
+export const subscribeMihomoLogs = async (): Promise<void> => {
+  logsSubscribed = true
   await startMihomoLogs()
+}
+
+export const unsubscribeMihomoLogs = async (): Promise<void> => {
+  logsSubscribed = false
+  stopMihomoLogs()
 }
 
 export const stopMihomoLogs = (): void => {
   logsRetry = 0
+  logsStartToken++
 
   if (mihomoLogsWs) {
-    mihomoLogsWs.removeAllListeners()
-    if (mihomoLogsWs.readyState === WebSocket.OPEN) {
-      mihomoLogsWs.close()
-    }
+    safelyDisposeWebSocket(mihomoLogsWs)
     mihomoLogsWs = null
   }
 }
 
 const mihomoLogs = async (): Promise<void> => {
+  const startToken = logsStartToken
   const { 'log-level': logLevel = 'warning' } = await getControledMihomoConfig()
+  if (startToken !== logsStartToken || !logsSubscribed) return
+
   const dynamicIpcPath = getMihomoIpcPath()
   const wsUrl = `ws+unix:${dynamicIpcPath}:/logs?level=${logLevel}`
+  if (mihomoLogsWs && !isWebSocketActive(mihomoLogsWs)) {
+    safelyDisposeWebSocket(mihomoLogsWs)
+    mihomoLogsWs = null
+  }
+  const ws = new WebSocket(wsUrl)
 
-  mihomoLogsWs = new WebSocket(wsUrl)
+  if (startToken !== logsStartToken || !logsSubscribed) {
+    safelyDisposeWebSocket(ws)
+    return
+  }
 
-  mihomoLogsWs.onmessage = (e): void => {
+  mihomoLogsWs = ws
+  let retryScheduled = false
+
+  const scheduleRetry = (): void => {
+    if (retryScheduled || !logsRetry || !logsSubscribed || startToken !== logsStartToken) return
+
+    retryScheduled = true
+    logsRetry--
+    setTimeout(() => {
+      if (!mihomoLogsWs && logsSubscribed && startToken === logsStartToken) {
+        void mihomoLogs()
+      }
+    }, 1000)
+  }
+
+  ws.onmessage = (e): void => {
+    if (mihomoLogsWs !== ws || startToken !== logsStartToken || !logsSubscribed) return
+
     const data = e.data as string
     logsRetry = MAX_RETRY
     try {
@@ -318,44 +395,103 @@ const mihomoLogs = async (): Promise<void> => {
     }
   }
 
-  mihomoLogsWs.onclose = (): void => {
-    if (logsRetry) {
-      logsRetry--
-      setTimeout(mihomoLogs, 1000)
-    }
-  }
-
-  mihomoLogsWs.onerror = (): void => {
-    if (mihomoLogsWs) {
-      mihomoLogsWs.close()
+  ws.onclose = (): void => {
+    if (mihomoLogsWs === ws) {
       mihomoLogsWs = null
     }
+    scheduleRetry()
+  }
+
+  ws.onerror = (): void => {
+    if (mihomoLogsWs === ws) {
+      mihomoLogsWs = null
+    }
+    scheduleRetry()
   }
 }
 
 export const startMihomoConnections = async (): Promise<void> => {
+  if (isWebSocketActive(mihomoConnectionsWs)) return
   connectionsRetry = MAX_RETRY
+  connectionsStartToken++
   await mihomoConnections()
+}
+
+export const subscribeMihomoConnections = async (): Promise<void> => {
+  connectionsSubscribed = true
+  await startMihomoConnections()
+}
+
+export const unsubscribeMihomoConnections = async (): Promise<void> => {
+  connectionsSubscribed = false
+  stopMihomoConnections()
+}
+
+export const startSubscribedMihomoStreams = async (): Promise<void> => {
+  if (logsSubscribed) {
+    await startMihomoLogs()
+  }
+  if (connectionsSubscribed) {
+    await startMihomoConnections()
+  }
 }
 
 export const stopMihomoConnections = (): void => {
   connectionsRetry = 0
+  connectionsStartToken++
 
   if (mihomoConnectionsWs) {
-    mihomoConnectionsWs.removeAllListeners()
-    if (mihomoConnectionsWs.readyState === WebSocket.OPEN) {
-      mihomoConnectionsWs.close()
-    }
+    safelyDisposeWebSocket(mihomoConnectionsWs)
     mihomoConnectionsWs = null
   }
 }
 
 const mihomoConnections = async (): Promise<void> => {
+  const startToken = connectionsStartToken
   const dynamicIpcPath = getMihomoIpcPath()
   const wsUrl = `ws+unix:${dynamicIpcPath}:/connections`
-  mihomoConnectionsWs = new WebSocket(wsUrl)
+  if (mihomoConnectionsWs && !isWebSocketActive(mihomoConnectionsWs)) {
+    safelyDisposeWebSocket(mihomoConnectionsWs)
+    mihomoConnectionsWs = null
+  }
+  const ws = new WebSocket(wsUrl)
 
-  mihomoConnectionsWs.onmessage = (e): void => {
+  if (startToken !== connectionsStartToken || !connectionsSubscribed) {
+    safelyDisposeWebSocket(ws)
+    return
+  }
+
+  mihomoConnectionsWs = ws
+  let retryScheduled = false
+
+  const scheduleRetry = (): void => {
+    if (
+      retryScheduled ||
+      !connectionsRetry ||
+      !connectionsSubscribed ||
+      startToken !== connectionsStartToken
+    ) {
+      return
+    }
+
+    retryScheduled = true
+    connectionsRetry--
+    setTimeout(() => {
+      if (!mihomoConnectionsWs && connectionsSubscribed && startToken === connectionsStartToken) {
+        void mihomoConnections()
+      }
+    }, 1000)
+  }
+
+  ws.onmessage = (e): void => {
+    if (
+      mihomoConnectionsWs !== ws ||
+      startToken !== connectionsStartToken ||
+      !connectionsSubscribed
+    ) {
+      return
+    }
+
     const data = e.data as string
     connectionsRetry = MAX_RETRY
     try {
@@ -365,18 +501,18 @@ const mihomoConnections = async (): Promise<void> => {
     }
   }
 
-  mihomoConnectionsWs.onclose = (): void => {
-    if (connectionsRetry) {
-      connectionsRetry--
-      setTimeout(mihomoConnections, 1000)
-    }
-  }
-
-  mihomoConnectionsWs.onerror = (): void => {
-    if (mihomoConnectionsWs) {
-      mihomoConnectionsWs.close()
+  ws.onclose = (): void => {
+    if (mihomoConnectionsWs === ws) {
       mihomoConnectionsWs = null
     }
+    scheduleRetry()
+  }
+
+  ws.onerror = (): void => {
+    if (mihomoConnectionsWs === ws) {
+      mihomoConnectionsWs = null
+    }
+    scheduleRetry()
   }
 }
 

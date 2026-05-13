@@ -2,17 +2,21 @@ import { Button, Card, CardBody, CardFooter, Tooltip } from '@heroui/react'
 import { FaCircleArrowDown, FaCircleArrowUp } from 'react-icons/fa6'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { calcTraffic } from '@renderer/utils/calc'
-import React, { lazy, Suspense, useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { IoLink } from 'react-icons/io5'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { useTranslation } from 'react-i18next'
 import { handleSiderCardPointerDown, handleSiderCardPress, siderCardClass } from './sider-card'
-
-const ConnCardChart = lazy(() => import('./conn-card-chart'))
+import ConnCardSparkline from './conn-card-sparkline'
 
 interface Props {
   iconOnly?: boolean
 }
+
+const TRAFFIC_SAMPLE_INTERVAL = 500
+const TRAFFIC_WINDOW_SECONDS = 10
+const TRAFFIC_SERIES_LENGTH = (TRAFFIC_WINDOW_SECONDS * 1000) / TRAFFIC_SAMPLE_INTERVAL
+
 const ConnCard: React.FC<Props> = (props) => {
   const { iconOnly } = props
   const { appConfig } = useAppConfig()
@@ -27,19 +31,15 @@ const ConnCard: React.FC<Props> = (props) => {
 
   const [upload, setUpload] = useState(0)
   const [download, setDownload] = useState(0)
-  const [series, setSeries] = useState(Array(10).fill(0))
+  const [series, setSeries] = useState(Array(TRAFFIC_SERIES_LENGTH).fill(0))
+  const latestTraffic = useRef<IMihomoTrafficInfo>({ up: 0, down: 0 })
 
   // 使用 useCallback 创建稳定的 handler 引用，通过 ref 读取 showTraffic 避免重建
   const handleTraffic = useCallback((_e: unknown, ...args: unknown[]) => {
     const info = args[0] as IMihomoTrafficInfo
+    latestTraffic.current = info
     setUpload(info.up)
     setDownload(info.down)
-    setSeries((prev) => {
-      const data = [...prev]
-      data.shift()
-      data.push(info.up + info.down)
-      return data
-    })
   }, [])
 
   useEffect(() => {
@@ -48,6 +48,19 @@ const ConnCard: React.FC<Props> = (props) => {
       window.electron.ipcRenderer.removeListener('mihomoTraffic', handleTraffic)
     }
   }, [handleTraffic])
+
+  useEffect(() => {
+    const sampleTraffic = (): void => {
+      const { up, down } = latestTraffic.current
+      setSeries((prev) => [...prev.slice(1 - TRAFFIC_SERIES_LENGTH), up + down])
+    }
+
+    const timer = window.setInterval(sampleTraffic, TRAFFIC_SAMPLE_INTERVAL)
+
+    return (): void => {
+      window.clearInterval(timer)
+    }
+  }, [])
 
   if (iconOnly) {
     return (
@@ -79,9 +92,7 @@ const ConnCard: React.FC<Props> = (props) => {
         className={siderCardClass(match, disableAnimations)}
       >
         <div className="w-full h-full absolute top-0 left-0 pointer-events-none overflow-hidden rounded-[14px]">
-          <Suspense fallback={null}>
-            <ConnCardChart series={series} selected={match} />
-          </Suspense>
+          <ConnCardSparkline series={series} selected={match} />
         </div>
         <CardBody className="pb-1 pt-0 px-0">
           <div className="flex justify-between">

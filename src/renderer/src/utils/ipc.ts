@@ -27,6 +27,10 @@ interface IpcApi {
   mihomoProxyDelay: (proxy: string, url?: string) => Promise<IMihomoDelay>
   mihomoGroupDelay: (group: string, url?: string) => Promise<IMihomoGroupDelay>
   patchMihomoConfig: (patch: Partial<IMihomoConfig>) => Promise<void>
+  subscribeMihomoLogs: () => Promise<void>
+  unsubscribeMihomoLogs: () => Promise<void>
+  subscribeMihomoConnections: () => Promise<void>
+  unsubscribeMihomoConnections: () => Promise<void>
   // AutoRun
   checkAutoRun: () => Promise<boolean>
   enableAutoRun: () => Promise<void>
@@ -121,6 +125,10 @@ export const {
   mihomoProxyDelay,
   mihomoGroupDelay,
   patchMihomoConfig,
+  subscribeMihomoLogs,
+  unsubscribeMihomoLogs,
+  subscribeMihomoConnections,
+  unsubscribeMihomoConnections,
   // AutoRun
   checkAutoRun,
   enableAutoRun,
@@ -225,9 +233,4 @@ export async function setTitleBarOverlay(overlay: TitleBarOverlayOptions): Promi
   } catch {
     // Not supported on this platform
   }
-}
-
-// getAppName: 获取应用程序名称
-export async function getAppName(appPath: string): Promise<string> {
-  return invoke<string>('getAppName', appPath)
 }

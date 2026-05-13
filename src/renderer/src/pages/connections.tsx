@@ -1,5 +1,10 @@
 import BasePage from '@renderer/components/base/base-page'
-import { mihomoCloseAllConnections, mihomoCloseConnection, getAppName } from '@renderer/utils/ipc'
+import {
+  mihomoCloseAllConnections,
+  mihomoCloseConnection,
+  subscribeMihomoConnections,
+  unsubscribeMihomoConnections
+} from '@renderer/utils/ipc'
 import { Key, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Badge,
@@ -29,9 +34,9 @@ import { HiOutlineAdjustmentsHorizontal } from 'react-icons/hi2'
 import { includesIgnoreCase } from '@renderer/utils/includes'
 import { useTranslation } from 'react-i18next'
 import { IoMdPause, IoMdPlay } from 'react-icons/io'
+import { onMihomoConnections } from '@renderer/utils/mihomo-events'
 
 let cachedConnections: IMihomoConnectionDetail[] = []
-const MAX_QUEUE_SIZE = 100
 
 const Connections: React.FC = () => {
   const { t } = useTranslation()
@@ -58,8 +63,7 @@ const Connections: React.FC = () => {
     ],
     connectionTableColumnWidths,
     connectionTableSortColumn,
-    connectionTableSortDirection,
-    displayAppName = true
+    connectionTableSortDirection
   } = appConfigValues
   const [connectionsInfo, setConnectionsInfo] = useState<IMihomoConnectionsInfo>()
   const [allConnections, setAllConnections] = useState<IMihomoConnectionDetail[]>(cachedConnections)
@@ -72,14 +76,8 @@ const Connections: React.FC = () => {
   const [viewMode, setViewMode] = useState<'list' | 'table'>(connectionViewMode)
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set(connectionTableColumns))
 
-  const [appNameCache, setAppNameCache] = useState<Record<string, string>>({})
-
   const activeConnectionsRef = useRef(activeConnections)
   const allConnectionsRef = useRef(allConnections)
-
-  const appNameRequestQueue = useRef(new Set<string>())
-  const processingAppNames = useRef(new Set<string>())
-  const processAppNameTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     activeConnectionsRef.current = activeConnections
     allConnectionsRef.current = allConnections
@@ -118,8 +116,17 @@ const Connections: React.FC = () => {
       filter === ''
         ? connections
         : connections.filter((connection) => {
-            const raw = JSON.stringify(connection)
-            return includesIgnoreCase(raw, filter)
+            return [
+              connection.metadata.process,
+              connection.metadata.sourceIP,
+              connection.metadata.destinationIP,
+              connection.metadata.host,
+              connection.metadata.sniffHost,
+              connection.metadata.remoteDestination,
+              connection.rule,
+              connection.rulePayload,
+              ...connection.chains
+            ].some((value) => includesIgnoreCase(value || '', filter))
           })
 
     if (viewMode === 'list' && connectionOrderBy) {
@@ -189,98 +196,16 @@ const Connections: React.FC = () => {
     setClosedConnections((closedConns) => closedConns.filter((conn) => conn.id !== id))
   }
 
-  const processAppNameQueue = useCallback(async () => {
-    if (processingAppNames.current.size >= 3 || appNameRequestQueue.current.size === 0) return
-
-    const pathsToProcess = Array.from(appNameRequestQueue.current).slice(0, 3)
-    pathsToProcess.forEach((path) => appNameRequestQueue.current.delete(path))
-
-    const promises = pathsToProcess.map(async (path) => {
-      if (processingAppNames.current.has(path)) return
-      processingAppNames.current.add(path)
-
-      try {
-        const appName = await getAppName(path)
-        if (appName) {
-          setAppNameCache((prev) => ({ ...prev, [path]: appName }))
-        }
-      } catch {
-        // ignore
-      } finally {
-        processingAppNames.current.delete(path)
-      }
-    })
-
-    await Promise.all(promises)
-
-    if (appNameRequestQueue.current.size > 0) {
-      processAppNameTimer.current = setTimeout(processAppNameQueue, 100)
-    }
-  }, [])
-
   useEffect(() => {
-    if (!displayAppName) return
+    let flushTimer: ReturnType<typeof setTimeout> | null = null
+    let latestInfo: IMihomoConnectionsInfo | null = null
 
-    const visiblePaths = new Set<string>()
-    const otherPaths = new Set<string>()
+    const flushInfo = (): void => {
+      flushTimer = null
+      const info = latestInfo
+      latestInfo = null
+      if (!info) return
 
-    const visibleConnections = filteredConnections.slice(0, 20)
-    visibleConnections.forEach((c) => {
-      const path = c.metadata.processPath || ''
-      if (path) visiblePaths.add(path)
-    })
-
-    const collectPaths = (connections: IMihomoConnectionDetail[]) => {
-      for (const c of connections) {
-        const path = c.metadata.processPath || ''
-        if (path && !visiblePaths.has(path)) {
-          otherPaths.add(path)
-        }
-      }
-    }
-
-    collectPaths(activeConnections)
-    collectPaths(closedConnections)
-
-    const loadAppName = (path: string): void => {
-      if (appNameCache[path] || processingAppNames.current.has(path)) return
-      if (appNameRequestQueue.current.size >= MAX_QUEUE_SIZE) return
-      appNameRequestQueue.current.add(path)
-    }
-
-    visiblePaths.forEach((path) => {
-      loadAppName(path)
-    })
-
-    if (otherPaths.size > 0) {
-      const loadOtherPaths = () => {
-        otherPaths.forEach((path) => {
-          loadAppName(path)
-        })
-      }
-
-      setTimeout(loadOtherPaths, 100)
-    }
-
-    if (processAppNameTimer.current) clearTimeout(processAppNameTimer.current)
-
-    processAppNameTimer.current = setTimeout(processAppNameQueue, 10)
-
-    return (): void => {
-      if (processAppNameTimer.current) clearTimeout(processAppNameTimer.current)
-    }
-  }, [
-    activeConnections,
-    closedConnections,
-    appNameCache,
-    processAppNameQueue,
-    displayAppName,
-    filteredConnections
-  ])
-
-  useEffect(() => {
-    const handler = (_e: unknown, ...args: unknown[]): void => {
-      const info = args[0] as IMihomoConnectionsInfo
       setConnectionsInfo(info)
 
       if (!info.connections) return
@@ -317,12 +242,32 @@ const Connections: React.FC = () => {
       cachedConnections = sliced
     }
 
+    const scheduleFlush = (): void => {
+      if (flushTimer) return
+      flushTimer = setTimeout(flushInfo, 500)
+    }
+
+    let unsubscribeEvent: (() => void) | undefined
+
+    const handler = (info: IMihomoConnectionsInfo): void => {
+      latestInfo = info
+      scheduleFlush()
+    }
+
     if (!isPaused) {
-      window.electron.ipcRenderer.on('mihomoConnections', handler)
+      unsubscribeEvent = onMihomoConnections(handler)
+      subscribeMihomoConnections().catch(() => {})
     }
 
     return (): void => {
-      window.electron.ipcRenderer.removeAllListeners('mihomoConnections')
+      if (flushTimer) {
+        clearTimeout(flushTimer)
+        flushInfo()
+      }
+      unsubscribeEvent?.()
+      if (!isPaused) {
+        unsubscribeMihomoConnections().catch(() => {})
+      }
     }
   }, [isPaused])
   const togglePause = useCallback(() => {
@@ -331,17 +276,10 @@ const Connections: React.FC = () => {
 
   const renderConnectionItem = useCallback(
     (i: number, connection: IMihomoConnectionDetail) => {
-      const displayName =
-        displayAppName && connection.metadata.processPath
-          ? appNameCache[connection.metadata.processPath]
-          : undefined
-
       return (
         <ConnectionItem
           setSelected={setSelected}
           setIsDetailModalOpen={setIsDetailModalOpen}
-          selected={selected}
-          displayName={displayName}
           close={closeConnection}
           index={i}
           key={connection.id}
@@ -349,7 +287,7 @@ const Connections: React.FC = () => {
         />
       )
     },
-    [selected, closeConnection, appNameCache, displayAppName]
+    [closeConnection]
   )
 
   return (

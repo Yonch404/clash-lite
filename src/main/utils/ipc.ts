@@ -15,7 +15,11 @@ import {
   mihomoUpgrade,
   mihomoHotReloadConfig,
   mihomoVersion,
-  patchMihomoConfig
+  patchMihomoConfig,
+  subscribeMihomoConnections,
+  subscribeMihomoLogs,
+  unsubscribeMihomoConnections,
+  unsubscribeMihomoLogs
 } from '../core/mihomoApi'
 import { checkAutoRun, disableAutoRun, enableAutoRun } from '../sys/autoRun'
 import {
@@ -63,7 +67,6 @@ import { startMonitor } from '../resolve/trafficMonitor'
 import { addProfileUpdater, removeProfileUpdater } from '../core/profileUpdater'
 import { getImageDataURL } from './image'
 import { get as httpGet } from './chromeRequest'
-import { getAppName } from './appName'
 import { logDir } from './dirs'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -136,6 +139,10 @@ const asyncHandlers: Record<string, AsyncFn> = {
   mihomoProxyDelay,
   mihomoGroupDelay,
   patchMihomoConfig,
+  subscribeMihomoLogs,
+  unsubscribeMihomoLogs,
+  subscribeMihomoConnections,
+  unsubscribeMihomoConnections,
   // AutoRun
   checkAutoRun,
   enableAutoRun,
@@ -189,7 +196,6 @@ const asyncHandlers: Record<string, AsyncFn> = {
   measureLatency,
   getImageDataURL,
   readImageFileDataURL,
-  getAppName,
   changeLanguage,
   setTitleBarOverlay
 }

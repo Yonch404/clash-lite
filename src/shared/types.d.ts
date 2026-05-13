@@ -217,7 +217,6 @@ interface IAppConfig {
   connectionTableColumnWidths?: Record<string, number>
   connectionTableSortColumn?: string
   connectionTableSortDirection?: 'asc' | 'desc'
-  displayAppName?: boolean
   disableHardwareAcceleration?: boolean
   autoQuitWithoutCore?: boolean
   autoQuitWithoutCoreDelay?: number

@@ -25,13 +25,12 @@ import { managerLogger } from '../utils/logger'
 import { createCappedLogWritableStream } from '../utils/logFile'
 import {
   startMihomoTraffic,
-  startMihomoConnections,
-  startMihomoLogs,
   startMihomoMemory,
   stopMihomoConnections,
   stopMihomoTraffic,
   stopMihomoLogs,
   stopMihomoMemory,
+  startSubscribedMihomoStreams,
   patchMihomoConfig,
   getAxios
 } from './mihomoApi'
@@ -296,9 +295,8 @@ function setupCoreListeners(
         managerLogger.warn('Failed to patch log level after core startup:', error)
       }
       await startMihomoTraffic()
-      await startMihomoConnections()
-      await startMihomoLogs()
       await startMihomoMemory()
+      await startSubscribedMihomoStreams()
       retry = 10
       resolveStartup([createProviderReadyPromise()])
     })()

@@ -7,35 +7,60 @@ import { IoLocationSharp } from 'react-icons/io5'
 import { CgTrash } from 'react-icons/cg'
 import { useTranslation } from 'react-i18next'
 import { includesIgnoreCase } from '@renderer/utils/includes'
+import { subscribeMihomoLogs, unsubscribeMihomoLogs } from '@renderer/utils/ipc'
 
 const LOGS_FILTER_KEY = 'logs-filter'
+const LOGS_CACHE_KEY = '__clashLiteLogsCache__'
+const LOGS_LISTENER_KEY = '__clashLiteLogsListenerAttached__'
 
-const cachedLogs: {
+interface LogsCache {
   log: IMihomoLogInfo[]
-  trigger: ((i: IMihomoLogInfo[]) => void) | null
-  clean: () => void
-} = {
-  log: [],
-  trigger: null,
-  clean(): void {
-    this.log = []
-    if (this.trigger !== null) {
-      this.trigger(this.log)
-    }
-  }
+  trigger: (() => void) | null
 }
 
-window.electron.ipcRenderer.on('mihomoLogs', (_e, ...args) => {
-  const log = args[0] as IMihomoLogInfo
-  log.time = new Date().toLocaleString()
-  cachedLogs.log.push(log)
-  if (cachedLogs.log.length >= 500) {
+function getLogsCache(): LogsCache {
+  const globalStore = globalThis as Record<string, unknown>
+  const existing = globalStore[LOGS_CACHE_KEY] as LogsCache | undefined
+  if (existing) return existing
+
+  const created: LogsCache = {
+    log: [],
+    trigger: null
+  }
+  globalStore[LOGS_CACHE_KEY] = created
+  return created
+}
+
+const cachedLogs = getLogsCache()
+
+function emitLogUpdate(): void {
+  cachedLogs.trigger?.()
+}
+
+function pushLog(log: IMihomoLogInfo): void {
+  cachedLogs.log.push({ ...log, time: new Date().toLocaleString() })
+  if (cachedLogs.log.length > 500) {
     cachedLogs.log.shift()
   }
-  if (cachedLogs.trigger !== null) {
-    cachedLogs.trigger(cachedLogs.log)
-  }
-})
+  emitLogUpdate()
+}
+
+function cleanLogs(): void {
+  cachedLogs.log = []
+  emitLogUpdate()
+}
+
+function ensureLogListener(): void {
+  const globalStore = globalThis as Record<string, unknown>
+  if (globalStore[LOGS_LISTENER_KEY]) return
+
+  window.electron.ipcRenderer.on('mihomoLogs', (_e, ...args) => {
+    pushLog(args[0] as IMihomoLogInfo)
+  })
+  globalStore[LOGS_LISTENER_KEY] = true
+}
+
+ensureLogListener()
 
 const Logs: React.FC = () => {
   const { t } = useTranslation()
@@ -60,10 +85,28 @@ const Logs: React.FC = () => {
 
   useEffect(() => {
     const old = cachedLogs.trigger
-    cachedLogs.trigger = (a): void => {
-      setLogs([...a])
+    let flushTimer: ReturnType<typeof setTimeout> | null = null
+
+    const flushLogs = (): void => {
+      flushTimer = null
+      setLogs([...cachedLogs.log])
     }
+
+    const scheduleFlush = (): void => {
+      if (flushTimer) return
+      flushTimer = setTimeout(flushLogs, 100)
+    }
+
+    cachedLogs.trigger = scheduleFlush
+
+    subscribeMihomoLogs().catch(() => {})
+
     return (): void => {
+      if (flushTimer) {
+        clearTimeout(flushTimer)
+        flushTimer = null
+      }
+      unsubscribeMihomoLogs().catch(() => {})
       cachedLogs.trigger = old
     }
   }, [])
@@ -100,7 +143,7 @@ const Logs: React.FC = () => {
             variant="light"
             color="danger"
             onPress={() => {
-              cachedLogs.clean()
+              cleanLogs()
             }}
           >
             <CgTrash className="text-lg" />
