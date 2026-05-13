@@ -250,7 +250,8 @@ async function performHttpsViaHttpProxy(
   ca: Buffer
 ): Promise<RawResponse> {
   const socket = await createProxyTlsSocket(target, proxy, ca, options.timeout ?? 30000)
-  const requestOptions: http.RequestOptions = {
+  const requestOptions: https.RequestOptions = {
+    protocol: 'https:',
     hostname: target.hostname,
     port: getPort(target),
     method: options.method,
@@ -262,7 +263,7 @@ async function performHttpsViaHttpProxy(
 
   try {
     return await sendRequest(target.toString(), options, (onResponse) =>
-      http.request(requestOptions, onResponse)
+      https.request(requestOptions, onResponse)
     )
   } catch (error) {
     socket.destroy()

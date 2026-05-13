@@ -14,20 +14,119 @@ import { checkAdminPrivileges } from '../core/manager'
 import { parse } from '../utils/yaml'
 import * as chromeRequest from '../utils/chromeRequest'
 
+const UPDATE_REPO = 'Yonch404/clash-lite'
+const LATEST_YML_URL = `https://github.com/${UPDATE_REPO}/releases/latest/download/latest.yml`
+const LATEST_RELEASE_API_URL = `https://api.github.com/repos/${UPDATE_REPO}/releases/latest`
+const UPDATE_REQUEST_TIMEOUT = 15000
+
+type UpdateProxy = Exclude<chromeRequest.RequestOptions['proxy'], false | undefined>
+
+interface GithubRelease {
+  tag_name?: string
+  name?: string
+  body?: string
+}
+
 export async function checkUpdate(): Promise<IAppVersion | undefined> {
-  const { 'mixed-port': mixedPort = 7890 } = await getControledMihomoConfig()
-  const githubUrl = 'https://github.com/Yonch404/clash-lite/releases/latest/download/latest.yml'
-  const res = await chromeRequest.get(githubUrl, {
-    headers: { 'Content-Type': 'application/octet-stream' },
-    proxy: { protocol: 'http', host: '127.0.0.1', port: mixedPort },
-    responseType: 'text'
-  })
-  const latest = parse(res.data as string) as IAppVersion
+  const latest = await fetchLatestVersionInfo()
   const currentVersion = app.getVersion()
   if (compareVersions(latest.version, currentVersion) > 0) {
     return latest
   } else {
     return undefined
+  }
+}
+
+async function fetchLatestVersionInfo(): Promise<IAppVersion> {
+  try {
+    return await fetchLatestFromYml()
+  } catch (error) {
+    await appLogger.warn('Failed to fetch latest.yml, falling back to GitHub release API', error)
+    return await fetchLatestFromReleaseApi()
+  }
+}
+
+async function fetchLatestFromYml(): Promise<IAppVersion> {
+  const res = await getUpdateResource<string>(LATEST_YML_URL, {
+    headers: getUpdateHeaders('application/octet-stream, text/plain, */*'),
+    responseType: 'text',
+    timeout: UPDATE_REQUEST_TIMEOUT
+  })
+
+  const latest = parse(String(res.data)) as Partial<IAppVersion> | null
+  if (!latest || typeof latest.version !== 'string') {
+    throw new Error('Invalid latest.yml: missing version')
+  }
+
+  return {
+    version: latest.version,
+    changelog: typeof latest.changelog === 'string' ? latest.changelog : ''
+  }
+}
+
+async function fetchLatestFromReleaseApi(): Promise<IAppVersion> {
+  const res = await getUpdateResource<GithubRelease>(LATEST_RELEASE_API_URL, {
+    headers: getUpdateHeaders('application/vnd.github+json'),
+    responseType: 'json',
+    timeout: UPDATE_REQUEST_TIMEOUT
+  })
+
+  const latest = res.data
+  const version = latest.tag_name || latest.name
+  if (!version) {
+    throw new Error('Invalid GitHub release response: missing version')
+  }
+
+  return {
+    version: version.replace(/^v/, ''),
+    changelog: latest.body || ''
+  }
+}
+
+async function getUpdateResource<T>(
+  url: string,
+  options: Omit<chromeRequest.RequestOptions, 'method' | 'body' | 'proxy'>
+): Promise<chromeRequest.Response<T>> {
+  const proxies = await getUpdateRequestProxies()
+  let lastError: unknown
+
+  for (const proxy of proxies) {
+    try {
+      const res = await chromeRequest.get<T>(url, { ...options, proxy })
+      ensureSuccessStatus(res)
+      return res
+    } catch (error) {
+      lastError = error
+      await appLogger.warn(
+        `Update request failed via ${proxy ? 'local proxy' : 'direct connection'}`,
+        error
+      )
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError))
+}
+
+async function getUpdateRequestProxies(): Promise<(UpdateProxy | false)[]> {
+  const { 'mixed-port': mixedPort = 7890 } = await getControledMihomoConfig()
+  const port = Number(mixedPort)
+  if (!Number.isFinite(port) || port <= 0) {
+    return [false]
+  }
+  return [{ protocol: 'http', host: '127.0.0.1', port }, false]
+}
+
+function getUpdateHeaders(accept: string): Record<string, string> {
+  return {
+    Accept: accept,
+    'Accept-Encoding': 'identity',
+    'User-Agent': `clash-lite/v${app.getVersion()}`
+  }
+}
+
+function ensureSuccessStatus(res: chromeRequest.Response<unknown>): void {
+  if (res.status < 200 || res.status >= 300) {
+    throw new Error(`Update request failed: status ${res.status}`)
   }
 }
 
@@ -50,8 +149,7 @@ function compareVersions(a: string, b: string): number {
 }
 
 export async function downloadAndInstallUpdate(version: string): Promise<void> {
-  const { 'mixed-port': mixedPort = 7890 } = await getControledMihomoConfig()
-  const githubBase = `https://github.com/Yonch404/clash-lite/releases/download/v${version}/`
+  const githubBase = `https://github.com/${UPDATE_REPO}/releases/download/v${version}/`
   const fileMap = {
     'win32-x64': `clash-lite-windows-${version}-x64-setup.exe`,
     'win32-arm64': `clash-lite-windows-${version}-arm64-setup.exe`
@@ -63,19 +161,17 @@ export async function downloadAndInstallUpdate(version: string): Promise<void> {
   if (isPortable()) {
     file = file.replace('-setup.exe', '-portable.7z')
   }
-  const proxy = { protocol: 'http' as const, host: '127.0.0.1', port: mixedPort }
   try {
     if (!existsSync(path.join(dataDir(), file))) {
-      const sha256Res = await chromeRequest.get(`${githubBase}${file}.sha256`, {
-        proxy,
+      const sha256Res = await getUpdateResource<string>(`${githubBase}${file}.sha256`, {
+        headers: getUpdateHeaders('text/plain, */*'),
         responseType: 'text'
       })
       const expectedHash = (sha256Res.data as string).trim().split(/\s+/)[0]
-      const res = await chromeRequest.get(`${githubBase}${file}`, {
+      const res = await getUpdateResource<Buffer>(`${githubBase}${file}`, {
         responseType: 'arraybuffer',
         timeout: 0,
-        proxy,
-        headers: { 'Content-Type': 'application/octet-stream' },
+        headers: getUpdateHeaders('application/octet-stream, */*'),
         onProgress: (loaded: number, total: number) => {
           mainWindow?.webContents.send('updateDownloadProgress', {
             status: 'downloading',
@@ -84,7 +180,7 @@ export async function downloadAndInstallUpdate(version: string): Promise<void> {
         }
       })
       mainWindow?.webContents.send('updateDownloadProgress', { status: 'verifying' })
-      const fileBuffer = Buffer.from(res.data as ArrayBuffer)
+      const fileBuffer = Buffer.from(res.data)
       const actualHash = createHash('sha256').update(fileBuffer).digest('hex')
       if (actualHash.toLowerCase() !== expectedHash.toLowerCase()) {
         throw new Error(`File integrity check failed: expected ${expectedHash}, got ${actualHash}`)
