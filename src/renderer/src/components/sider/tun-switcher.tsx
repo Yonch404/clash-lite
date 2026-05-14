@@ -32,7 +32,7 @@ const TunSwitcher: React.FC<Props> = (props) => {
     window.electron.ipcRenderer.send('updateTrayMenu')
     await window.electron.ipcRenderer.invoke('updateTrayIcon')
 
-    if (platform === 'win32') {
+    if (platform === 'win32' || (platform === 'linux' && enable)) {
       await restartCore()
     }
   }

@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios'
 import WebSocket from 'ws'
+import i18next from '../../shared/i18n'
 import { getAppConfig, getControledMihomoConfig } from '../config'
 import { mainWindow } from '../window'
 import { tray } from '../resolve/tray'
@@ -9,6 +10,7 @@ import { mihomoWorkConfigPath } from '../utils/dirs'
 import { generateProfile, getRuntimeConfig } from './factory'
 import { getMihomoIpcPath } from './manager'
 import { getWindowsControllerEndpoint } from './windowsElevated'
+import { ensureTunCorePrivilege } from './permissions'
 
 const mihomoApiLogger = createLogger('MihomoApi')
 
@@ -239,7 +241,15 @@ export const mihomoGroupDelay = async (group: string, url?: string): Promise<IMi
 
 export const mihomoUpgrade = async (): Promise<void> => {
   const instance = await getAxios()
-  return await instance.post('/upgrade', undefined, { timeout: 90000 })
+  await instance.post('/upgrade', undefined, { timeout: 90000 })
+
+  const { tun } = await getControledMihomoConfig()
+  if (process.platform === 'linux' && (tun?.enable ?? true)) {
+    const hasPrivilege = await ensureTunCorePrivilege({ prompt: true })
+    if (!hasPrivilege) {
+      throw new Error(i18next.t('tun.permissions.reauthorizeCancelled'))
+    }
+  }
 }
 
 export const mihomoHotReloadConfig = async (): Promise<void> => {

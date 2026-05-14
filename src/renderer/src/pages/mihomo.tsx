@@ -6,7 +6,6 @@ import { toast } from '@renderer/components/base/toast'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-config'
 import { mihomoUpgrade, mihomoVersion, restartCore } from '@renderer/utils/ipc'
-import { platform } from '@renderer/utils/init'
 import PubSub from 'pubsub-js'
 import React, { useMemo, useState } from 'react'
 import { IoMdCloudDownload } from 'react-icons/io'
@@ -52,13 +51,7 @@ const Mihomo: React.FC = () => {
                   setTimeout(() => {
                     PubSub.publish('mihomo-core-changed')
                   }, 2000)
-                  if (platform !== 'win32') {
-                    new Notification(t('mihomo.coreAuthLost'), {
-                      body: t('mihomo.coreUpgradeSuccess')
-                    })
-                  } else {
-                    new Notification(t('mihomo.coreUpgradeSuccess'))
-                  }
+                  new Notification(t('mihomo.coreUpgradeSuccess'))
                 } catch (e) {
                   if (typeof e === 'string' && e.includes('already using latest version')) {
                     new Notification(t('mihomo.alreadyLatestVersion'))

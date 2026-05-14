@@ -1,7 +1,6 @@
 import { exec, execFile } from 'child_process'
 import { promisify } from 'util'
 import { existsSync } from 'fs'
-import { stat } from 'fs/promises'
 import path from 'path'
 import { app, dialog } from 'electron'
 import { mihomoCorePath, mihomoCoreDir } from '../utils/dirs'
@@ -11,6 +10,7 @@ import { checkAdminPrivileges } from './admin'
 
 const execPromise = promisify(exec)
 const execFilePromise = promisify(execFile)
+const LINUX_TUN_CAPABILITIES = 'cap_net_admin,cap_net_bind_service+ep'
 
 // 内核名称白名单
 const ALLOWED_CORES = ['mihomo'] as const
@@ -78,21 +78,75 @@ export async function checkTunCorePrivilege(): Promise<boolean> {
   }
 
   try {
-    const stats = await stat(corePath)
-    const isSetuidRoot = stats.uid === 0 && (stats.mode & 0o4000) !== 0
-    if (isSetuidRoot) {
-      return true
-    }
-  } catch (error) {
-    managerLogger.warn('Failed to inspect mihomo core permissions', error)
-  }
-
-  try {
     const { stdout } = await execFilePromise('getcap', [corePath], { encoding: 'utf8' })
     return stdout.includes('cap_net_admin')
   } catch {
     return false
   }
+}
+
+async function grantLinuxTunCorePrivilege(): Promise<void> {
+  if (process.platform !== 'linux') return
+
+  const corePath = mihomoCorePath('mihomo')
+  validateCorePath(corePath)
+
+  if (!existsSync(corePath)) {
+    throw new Error(i18next.t('tun.error.linuxCoreNotFound'))
+  }
+
+  const script = `
+if ! command -v setcap >/dev/null 2>&1; then
+  echo "setcap not found" >&2
+  exit 127
+fi
+chmod 0755 "$1"
+setcap '${LINUX_TUN_CAPABILITIES}' "$1"
+`.trim()
+
+  const shell = 'sh'
+  const shellArgs = ['-c', script, 'sh', corePath]
+
+  try {
+    if (process.geteuid?.() === 0) {
+      await execFilePromise(shell, shellArgs, { encoding: 'utf8' })
+    } else {
+      await execFilePromise('pkexec', [shell, ...shellArgs], { encoding: 'utf8' })
+    }
+  } catch (error) {
+    managerLogger.error('Failed to grant Linux TUN core privilege', error)
+    throw new Error(i18next.t('tun.permissions.reauthorizeFailed'))
+  }
+}
+
+function shouldPromptLinuxCoreReauthorization(): boolean {
+  const choice = dialog.showMessageBoxSync({
+    type: 'warning',
+    title: i18next.t('tun.permissions.reauthorizeTitle'),
+    message: i18next.t('tun.permissions.reauthorizeMessage'),
+    buttons: [i18next.t('tun.permissions.reauthorize'), i18next.t('common.cancel')],
+    defaultId: 0,
+    cancelId: 1
+  })
+
+  return choice === 0
+}
+
+export async function ensureTunCorePrivilege(options: { prompt?: boolean } = {}): Promise<boolean> {
+  if (process.platform !== 'linux') {
+    return true
+  }
+
+  if (await checkTunCorePrivilege()) {
+    return true
+  }
+
+  if (options.prompt && !shouldPromptLinuxCoreReauthorization()) {
+    return false
+  }
+
+  await grantLinuxTunCorePrivilege()
+  return await checkTunCorePrivilege()
 }
 
 export async function checkHighPrivilegeCore(): Promise<boolean> {

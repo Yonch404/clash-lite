@@ -15,8 +15,10 @@ fi
 chmod 4755 '/opt/Clash Lite/chrome-sandbox' 2>/dev/null || true
 
 if [ -f '/opt/Clash Lite/resources/sidecar/mihomo' ]; then
-    chown root:root '/opt/Clash Lite/resources/sidecar/mihomo' 2>/dev/null || true
-    chmod 4755 '/opt/Clash Lite/resources/sidecar/mihomo' 2>/dev/null || true
+    chmod 0755 '/opt/Clash Lite/resources/sidecar/mihomo' 2>/dev/null || true
+    if command -v setcap >/dev/null 2>&1; then
+        setcap 'cap_net_admin,cap_net_bind_service+ep' '/opt/Clash Lite/resources/sidecar/mihomo' 2>/dev/null || true
+    fi
 fi
 
 if hash update-mime-database 2>/dev/null; then

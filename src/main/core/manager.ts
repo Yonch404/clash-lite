@@ -36,7 +36,7 @@ import {
 } from './mihomoApi'
 import { generateProfile } from './factory'
 import {
-  checkTunCorePrivilege,
+  ensureTunCorePrivilege,
   getSessionAdminStatus,
   setStopCoreBeforeAdminRestart
 } from './permissions'
@@ -55,6 +55,7 @@ export {
   checkAdminPrivileges,
   checkHighPrivilegeCore,
   checkTunCorePrivilege,
+  ensureTunCorePrivilege,
   restartAsAdmin,
   showErrorDialog
 } from './permissions'
@@ -86,6 +87,10 @@ export function initCoreWatcher(): void {
     // 等待核心自我更新完成，避免与核心自动重启产生竞态
     await new Promise((resolve) => setTimeout(resolve, 3000))
     try {
+      const mihomoConfig = await getControledMihomoConfig()
+      if (process.platform === 'linux' && (mihomoConfig.tun?.enable ?? true)) {
+        await ensureTunCorePrivilege({ prompt: true })
+      }
       await stopCore(true)
       await startCore()
     } catch (e) {
@@ -156,7 +161,7 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
     process.platform === 'win32' && tunEnabled && !getSessionAdminStatus()
 
   if (process.platform === 'linux' && (tun?.enable ?? true)) {
-    const hasTunPrivilege = await checkTunCorePrivilege()
+    const hasTunPrivilege = await ensureTunCorePrivilege({ prompt: true })
     if (!hasTunPrivilege) {
       throw new Error(i18next.t('tun.error.linuxTunPermissionDenied'))
     }
@@ -351,7 +356,12 @@ function setupCoreListeners(
     if (str.includes('configure tun interface: operation not permitted')) {
       mainWindow?.webContents.send('controledMihomoConfigUpdated')
       ipcMain.emit('updateTrayMenu')
-      rejectStartup(i18next.t('tun.error.tunPermissionDenied'), true)
+      rejectStartup(
+        process.platform === 'linux'
+          ? i18next.t('tun.error.linuxTunPermissionDenied')
+          : i18next.t('tun.error.tunPermissionDenied'),
+        true
+      )
       return
     }
 
