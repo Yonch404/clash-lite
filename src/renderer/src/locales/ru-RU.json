@@ -324,7 +324,6 @@
   "proxies.card.title": "Прокси группы",
   "proxies.delay.test": "Тест",
   "proxies.delay.timeout": "Таймаут",
-  "proxies.unpin": "Открепить",
   "proxies.mode.full": "Подробная информация",
   "proxies.mode.simple": "Краткая информация",
   "proxies.mode.direct": "Прямое подключение",

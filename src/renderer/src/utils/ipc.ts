@@ -22,7 +22,6 @@ interface IpcApi {
   mihomoGroups: () => Promise<IMihomoMixedGroup[]>
   mihomoProxyProviders: () => Promise<IMihomoProxyProviders>
   mihomoChangeProxy: (group: string, proxy: string) => Promise<IMihomoProxy>
-  mihomoUnfixedProxy: (group: string) => Promise<IMihomoProxy>
   mihomoUpgrade: () => Promise<void>
   mihomoProxyDelay: (proxy: string, url?: string) => Promise<IMihomoDelay>
   mihomoGroupDelay: (group: string, url?: string) => Promise<IMihomoGroupDelay>
@@ -117,7 +116,6 @@ export const {
   mihomoGroups,
   mihomoProxyProviders,
   mihomoChangeProxy,
-  mihomoUnfixedProxy,
   mihomoUpgrade,
   mihomoProxyDelay,
   mihomoGroupDelay,

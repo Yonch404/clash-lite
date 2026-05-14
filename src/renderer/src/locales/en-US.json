@@ -343,7 +343,6 @@
   "proxies.card.title": "ProxyGrp",
   "proxies.delay.test": "Test",
   "proxies.delay.timeout": "Timeout",
-  "proxies.unpin": "Unpin",
   "proxies.mode.full": "Detailed Info",
   "proxies.mode.simple": "Simple Info",
   "proxies.mode.direct": "Direct Mode",

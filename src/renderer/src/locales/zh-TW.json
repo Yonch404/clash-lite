@@ -343,7 +343,6 @@
   "proxies.card.title": "代理組",
   "proxies.delay.test": "測試",
   "proxies.delay.timeout": "逾時",
-  "proxies.unpin": "取消固定",
   "proxies.mode.full": "詳細信息",
   "proxies.mode.simple": "簡潔信息",
   "proxies.mode.direct": "直連模式",

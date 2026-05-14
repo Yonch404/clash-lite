@@ -1,7 +1,5 @@
 import { Button, Card, CardBody } from '@heroui/react'
-import { mihomoUnfixedProxy } from '@renderer/utils/ipc'
 import React, { useMemo, useState, useCallback } from 'react'
-import { FaMapPin } from 'react-icons/fa6'
 import { useTranslation } from 'react-i18next'
 
 interface Props {
@@ -60,8 +58,6 @@ const ProxyItemBase: React.FC<Props> = (props) => {
     })
   }, [proxy.name, group.testUrl, onProxyDelay, mutateProxies])
 
-  const fixed = useMemo(() => group.fixed && group.fixed === proxy.name, [group.fixed, proxy.name])
-
   return (
     <Card
       as="div"
@@ -71,11 +67,9 @@ const ProxyItemBase: React.FC<Props> = (props) => {
       fullWidth
       shadow="sm"
       className={`${
-        fixed
-          ? 'bg-secondary/30 border-r-2 border-r-secondary border-l-2 border-l-secondary'
-          : selected
-            ? 'bg-primary/30 border-r-2 border-r-primary border-l-2 border-l-primary'
-            : 'bg-content2'
+        selected
+          ? 'bg-primary/30 border-r-2 border-r-primary border-l-2 border-l-primary'
+          : 'bg-content2'
       }`}
       radius="sm"
     >
@@ -88,21 +82,6 @@ const ProxyItemBase: React.FC<Props> = (props) => {
                   {proxy.name}
                 </div>
               </div>
-              {fixed && (
-                <Button
-                  isIconOnly
-                  title={t('proxies.unpin')}
-                  color="danger"
-                  onPress={async () => {
-                    await mihomoUnfixedProxy(group.name)
-                    mutateProxies()
-                  }}
-                  variant="light"
-                  className="h-5 p-0 text-sm"
-                >
-                  <FaMapPin className="text-md le" />
-                </Button>
-              )}
             </div>
             <div className="flex justify-between items-center pl-1">
               <div className="flex gap-1 items-center">
@@ -142,21 +121,6 @@ const ProxyItemBase: React.FC<Props> = (props) => {
               </div>
             </div>
             <div className="flex justify-end">
-              {fixed && (
-                <Button
-                  isIconOnly
-                  title={t('proxies.unpin')}
-                  color="danger"
-                  onPress={async () => {
-                    await mihomoUnfixedProxy(group.name)
-                    mutateProxies()
-                  }}
-                  variant="light"
-                  className="h-5 p-0 text-sm"
-                >
-                  <FaMapPin className="text-md le" />
-                </Button>
-              )}
               <Button
                 isIconOnly
                 title={proxy.type}
@@ -183,7 +147,6 @@ const ProxyItem = React.memo(ProxyItemBase, (prevProps, nextProps) => {
     prevProps.proxy.history === nextProps.proxy.history &&
     prevProps.selected === nextProps.selected &&
     prevProps.proxyDisplayMode === nextProps.proxyDisplayMode &&
-    prevProps.group.fixed === nextProps.group.fixed &&
     prevProps.isGroupTesting === nextProps.isGroupTesting
   )
 })

@@ -10,7 +10,6 @@ const validInvokeChannels = [
   'mihomoGroups',
   'mihomoProxyProviders',
   'mihomoChangeProxy',
-  'mihomoUnfixedProxy',
   'mihomoUpgrade',
   'mihomoProxyDelay',
   'mihomoGroupDelay',
