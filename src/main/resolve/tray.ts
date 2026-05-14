@@ -8,7 +8,9 @@ import {
   patchAppConfig,
   patchControledMihomoConfig
 } from '../config'
-import appIcon from '../../../resources/app-icon.png?asset'
+import windowsTrayIcon from '../../../build/app-icon.ico?asset'
+import linuxTrayIcon from '../../../resources/tray-icon-linux.png?asset'
+import macTrayIcon from '../../../resources/tray-icon@2x.png?asset'
 import { patchMihomoConfig } from '../core/mihomoApi'
 import { mainWindow, showMainWindow, triggerMainWindow } from '../window'
 import { dataDir, logDir, mihomoCoreDir, mihomoWorkDir } from '../utils/dirs'
@@ -16,7 +18,7 @@ import { triggerSysProxy } from '../sys/sysproxy'
 import { quitWithoutCore } from '../core/manager'
 
 export let tray: Tray | null = null
-const trayIconSize = 16
+type TrayImage = Electron.NativeImage | string
 
 export const buildContextMenu = async (): Promise<Menu> => {
   const { mode } = await getControledMihomoConfig()
@@ -233,8 +235,13 @@ export async function createTray(): Promise<void> {
   }
 }
 
-function createTrayImage(): Electron.NativeImage {
-  return nativeImage.createFromPath(appIcon).resize({ height: trayIconSize })
+function createTrayImage(): TrayImage {
+  if (process.platform === 'win32') {
+    return windowsTrayIcon
+  }
+
+  const iconPath = process.platform === 'darwin' ? macTrayIcon : linuxTrayIcon
+  return nativeImage.createFromPath(iconPath)
 }
 
 async function updateTrayMenu(): Promise<void> {
