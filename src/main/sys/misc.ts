@@ -1,5 +1,5 @@
 import { exec, execFile, spawn } from 'child_process'
-import { readFile } from 'fs/promises'
+import { readFile, writeFile } from 'fs/promises'
 import path from 'path'
 import { promisify } from 'util'
 import { app, dialog, nativeTheme, shell } from 'electron'
@@ -60,7 +60,6 @@ export async function openUWPTool(): Promise<void> {
 }
 
 export async function setupFirewall(): Promise<void> {
-  const execPromise = promisify(exec)
   const execFilePromise = promisify(execFile)
 
   if (process.platform === 'win32') {
@@ -68,15 +67,49 @@ export async function setupFirewall(): Promise<void> {
       { name: 'mihomo', program: mihomoCorePath('mihomo') },
       { name: 'Clash Lite', program: exePath() }
     ]
-    for (const rule of rules) {
-      await execPromise(`netsh advfirewall firewall delete rule name="${rule.name}"`, {
-        shell: 'cmd'
-      }).catch(() => {})
-      await execPromise(
-        `netsh advfirewall firewall add rule name="${rule.name}" dir=in action=allow program="${rule.program}" enable=yes profile=any`,
-        { shell: 'cmd' }
+
+    const escapePowerShellSingleQuoted = (value: string): string => value.replace(/'/g, "''")
+    const scriptPath = path.join(dataDir(), 'reset-firewall.ps1')
+    const script = `\
+$rules = @(
+${rules
+  .map(
+    (rule) =>
+      `  @{ Name = '${escapePowerShellSingleQuoted(rule.name)}'; Program = '${escapePowerShellSingleQuoted(rule.program)}' }`
+  )
+  .join(',\n')}
+)
+
+foreach ($rule in $rules) {
+  & netsh advfirewall firewall delete rule name="$($rule.Name)" | Out-Null
+  & netsh advfirewall firewall add rule name="$($rule.Name)" dir=in action=allow program="$($rule.Program)" enable=yes profile=any | Out-Null
+}
+`
+
+    await writeFile(scriptPath, script, 'utf8')
+
+    const isAdmin = await checkAdminPrivileges()
+    if (!isAdmin) {
+      const argumentList = `-NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`
+      const command =
+        `$arguments = '${escapePowerShellSingleQuoted(argumentList)}'; ` +
+        `Start-Process -FilePath 'powershell.exe' ` +
+        `-ArgumentList $arguments -Verb RunAs -WindowStyle Hidden -Wait`
+
+      await execFilePromise(
+        'powershell.exe',
+        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command],
+        { windowsHide: true }
       )
+      return
     }
+
+    await execFilePromise(
+      'powershell.exe',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath],
+      { windowsHide: true }
+    )
+
     return
   }
 

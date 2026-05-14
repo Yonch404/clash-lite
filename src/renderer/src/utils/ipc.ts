@@ -68,9 +68,6 @@ interface IpcApi {
   quitWithoutCore: () => Promise<void>
   // System
   triggerSysProxy: (enable: boolean) => Promise<void>
-  checkAdminPrivileges: () => Promise<boolean>
-  restartAsAdmin: () => Promise<void>
-  checkHighPrivilegeCore: () => Promise<boolean>
   openUWPTool: () => Promise<void>
   setupFirewall: () => Promise<void>
   getInterfaces: () => Promise<Record<string, NetworkInterfaceInfo[]>>
@@ -166,9 +163,6 @@ export const {
   quitWithoutCore,
   // System
   triggerSysProxy,
-  checkAdminPrivileges,
-  restartAsAdmin,
-  checkHighPrivilegeCore,
   openUWPTool,
   setupFirewall,
   getInterfaces,

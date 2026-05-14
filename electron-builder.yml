@@ -36,6 +36,7 @@ nsis:
   oneClick: false
   perMachine: true
   createDesktopShortcut: always
+  include: build/installer.nsh
 linux:
   executableName: clash-lite
   icon: build/app-icon.png

@@ -129,3 +129,15 @@ export function coreLogPath(): string {
   const name = `core-${year}-${month}-${day}`
   return path.join(logDir(), `${name}.log`)
 }
+
+export function windowsCoreHelperRequestPath(): string {
+  return path.join(dataDir(), 'windows-core-helper.json')
+}
+
+export function windowsCoreHelperPidPath(): string {
+  return path.join(dataDir(), 'windows-core-helper.pid')
+}
+
+export function windowsControllerSecretPath(): string {
+  return path.join(dataDir(), 'windows-controller-secret')
+}

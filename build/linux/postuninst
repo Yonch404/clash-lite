@@ -7,6 +7,19 @@ case "$1" in
     fi
     
     [ -L '/usr/bin/clash-lite' ] && rm -f '/usr/bin/clash-lite'
+    rm -f /etc/xdg/autostart/clash-lite.desktop 2>/dev/null || true
+
+    if [ "$1" = "purge" ]; then
+        rm -rf /root/.config/clash-lite /root/.cache/clash-lite 2>/dev/null || true
+
+        if [ -d /home ]; then
+            for home_dir in /home/*; do
+                [ -d "$home_dir" ] || continue
+                rm -rf "$home_dir/.config/clash-lite" "$home_dir/.cache/clash-lite" 2>/dev/null || true
+                rm -f "$home_dir/.config/autostart/clash-lite.desktop" 2>/dev/null || true
+            done
+        fi
+    fi
 
     if hash update-mime-database 2>/dev/null; then
       update-mime-database /usr/share/mime || true

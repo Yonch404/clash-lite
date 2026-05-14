@@ -38,13 +38,7 @@ import {
   updateProfileItem,
   setProfileConfig
 } from '../config'
-import {
-  quitWithoutCore,
-  restartCore,
-  checkAdminPrivileges,
-  restartAsAdmin,
-  checkHighPrivilegeCore
-} from '../core/manager'
+import { quitWithoutCore, restartCore } from '../core/manager'
 import { triggerSysProxy } from '../sys/sysproxy'
 import { checkUpdate, downloadAndInstallUpdate } from '../resolve/autoUpdater'
 import {
@@ -176,9 +170,6 @@ const asyncHandlers: Record<string, AsyncFn> = {
   quitWithoutCore,
   // System
   triggerSysProxy,
-  checkAdminPrivileges,
-  restartAsAdmin,
-  checkHighPrivilegeCore,
   openUWPTool,
   setupFirewall,
   copyEnv,

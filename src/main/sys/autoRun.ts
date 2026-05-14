@@ -6,12 +6,10 @@ import { promisify } from 'util'
 import path from 'path'
 import { exePath, homeDir } from '../utils/dirs'
 import { managerLogger } from '../utils/logger'
-import { checkAdminPrivileges } from '../core/admin'
 
 const appName = 'clash-lite'
 
-function getTaskXml(asAdmin: boolean): string {
-  const runLevel = asAdmin ? 'HighestAvailable' : 'LeastPrivilege'
+function getTaskXml(): string {
   return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <Triggers>
@@ -23,7 +21,7 @@ function getTaskXml(asAdmin: boolean): string {
   <Principals>
     <Principal id="Author">
       <LogonType>InteractiveToken</LogonType>
-      <RunLevel>${runLevel}</RunLevel>
+      <RunLevel>LeastPrivilege</RunLevel>
     </Principal>
   </Principals>
   <Settings>
@@ -97,35 +95,21 @@ export async function enableAutoRun(): Promise<void> {
   if (process.platform === 'win32') {
     const execPromise = promisify(exec)
     const taskFilePath = path.join(tmpdir(), `${appName}.xml`)
-    const isAdmin = await checkAdminPrivileges()
-    await writeFile(taskFilePath, Buffer.from(`\ufeff${getTaskXml(isAdmin)}`, 'utf-16le'))
+    await writeFile(taskFilePath, Buffer.from(`\ufeff${getTaskXml()}`, 'utf-16le'))
 
     let taskCreated = false
 
-    if (isAdmin) {
-      try {
-        await execPromise(
-          `%SystemRoot%\\System32\\schtasks.exe /create /tn "${appName}" /xml "${taskFilePath}" /f`
-        )
-        taskCreated = true
-      } catch (error) {
-        await managerLogger.warn('Failed to create scheduled task as admin:', error)
+    try {
+      await execPromise(
+        `%SystemRoot%\\System32\\schtasks.exe /create /tn "${appName}" /xml "${taskFilePath}" /f`
+      )
+      const created = await checkAutoRun()
+      taskCreated = created
+      if (!created) {
+        await managerLogger.warn('Scheduled task creation may have failed')
       }
-    } else {
-      try {
-        await execPromise(
-          `powershell -NoProfile -Command "Start-Process schtasks -Verb RunAs -ArgumentList '/create', '/tn', '${appName}', '/xml', '${taskFilePath}', '/f' -WindowStyle Hidden -Wait"`
-        )
-        // 验证任务是否创建成功
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-        const created = await checkAutoRun()
-        taskCreated = created
-        if (!created) {
-          await managerLogger.warn('Scheduled task creation may have failed or been rejected')
-        }
-      } catch {
-        await managerLogger.info('Scheduled task creation failed, trying registry fallback')
-      }
+    } catch (error) {
+      await managerLogger.info('Scheduled task creation failed, trying registry fallback', error)
     }
 
     // 任务计划程序失败时使用注册表备用方案（适用于 Windows IoT LTSC 等受限环境）
@@ -175,17 +159,10 @@ Categories=Utility;
 export async function disableAutoRun(): Promise<void> {
   if (process.platform === 'win32') {
     const execPromise = promisify(exec)
-    const isAdmin = await checkAdminPrivileges()
 
     // 删除任务计划程序中的任务
     try {
-      if (isAdmin) {
-        await execPromise(`%SystemRoot%\\System32\\schtasks.exe /delete /tn "${appName}" /f`)
-      } else {
-        await execPromise(
-          `powershell -NoProfile -Command "Start-Process schtasks -Verb RunAs -ArgumentList '/delete', '/tn', '${appName}', '/f' -WindowStyle Hidden -Wait"`
-        )
-      }
+      await execPromise(`%SystemRoot%\\System32\\schtasks.exe /delete /tn "${appName}" /f`)
     } catch {
       // 任务可能不存在，忽略错误
     }

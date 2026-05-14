@@ -40,12 +40,13 @@ import {
   getSessionAdminStatus,
   setStopCoreBeforeAdminRestart
 } from './permissions'
+import { cleanupSocketFile, waitForCoreReady } from './process'
 import {
-  cleanupSocketFile,
-  cleanupWindowsNamedPipes,
-  validateWindowsPipeAccess,
-  waitForCoreReady
-} from './process'
+  getWindowsControllerEndpoint,
+  startWindowsElevatedCore,
+  stopWindowsElevatedCore,
+  type WindowsCoreHelperRequest
+} from './windowsElevated'
 
 // 重新导出权限相关函数
 export {
@@ -61,12 +62,13 @@ export {
 export { getDefaultDevice } from './dns'
 
 const execFilePromise = promisify(execFile)
-const ctlParam = process.platform === 'win32' ? '-ext-ctl-pipe' : '-ext-ctl-unix'
+const unixCtlParam = '-ext-ctl-unix'
 
 // 核心进程状态
 let child: ChildProcess | null = null
 let retry = 10
 let isRestarting = false
+let coreLaunchMode: 'local' | 'windows-elevated-task' | null = null
 
 // 文件监听器
 let coreWatcher: FSWatcher | null = null
@@ -128,12 +130,15 @@ export const getMihomoIpcPath = (): string => {
 interface CoreConfig {
   corePath: string
   workDir: string
-  ipcPath: string
+  controllerParam: string
+  controllerAddress: string
+  controllerSecret?: string
   logLevel: LogLevel
   tunEnabled: boolean
   autoSetDNS: boolean
   cpuPriority: string
   detached: boolean
+  useWindowsElevatedTask: boolean
 }
 
 // 准备核心配置
@@ -146,9 +151,10 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
   const core = 'mihomo'
 
   const { 'log-level': logLevel = 'info' as LogLevel, tun } = mihomoConfig
-  if (process.platform === 'win32' && (tun?.enable ?? true) && !getSessionAdminStatus()) {
-    throw new Error(i18next.t('tun.error.tunPermissionDenied'))
-  }
+  const tunEnabled = tun?.enable ?? true
+  const useWindowsElevatedTask =
+    process.platform === 'win32' && tunEnabled && !getSessionAdminStatus()
+
   if (process.platform === 'linux' && (tun?.enable ?? true)) {
     const hasTunPrivilege = await checkTunCorePrivilege()
     if (!hasTunPrivilege) {
@@ -179,33 +185,52 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
   if (!skipStop && hasCoreProcess()) {
     await stopCore()
   }
-  await cleanupSocketFile()
-
-  // 获取动态 IPC 路径
-  const ipcPath = getMihomoIpcPath()
-  managerLogger.info(`Using IPC path: ${ipcPath}`)
-
-  if (process.platform === 'win32') {
-    await validateWindowsPipeAccess(ipcPath)
+  if (process.platform !== 'win32') {
+    await cleanupSocketFile()
   }
+
+  const windowsController =
+    process.platform === 'win32' ? await getWindowsControllerEndpoint() : undefined
+  const controllerParam = process.platform === 'win32' ? '-ext-ctl' : unixCtlParam
+  const controllerAddress = windowsController
+    ? `${windowsController.host}:${windowsController.port}`
+    : getMihomoIpcPath()
+
+  managerLogger.info(`Using controller: ${controllerAddress}`)
 
   return {
     corePath: mihomoCorePath(core),
     workDir: diffWorkDir ? mihomoProfileWorkDir(current) : mihomoWorkDir(),
-    ipcPath,
+    controllerParam,
+    controllerAddress,
+    controllerSecret: windowsController?.secret,
     logLevel,
-    tunEnabled: tun?.enable ?? true,
+    tunEnabled,
     autoSetDNS: false,
     cpuPriority: mihomoCpuPriority,
-    detached
+    detached,
+    useWindowsElevatedTask
   }
 }
 
 // 启动核心进程
 function spawnCoreProcess(config: CoreConfig): ChildProcess {
-  const { corePath, workDir, ipcPath, cpuPriority, detached } = config
+  const {
+    corePath,
+    workDir,
+    controllerParam,
+    controllerAddress,
+    controllerSecret,
+    cpuPriority,
+    detached
+  } = config
 
-  const proc = spawn(corePath, ['-d', workDir, ctlParam, ipcPath], {
+  const args = ['-d', workDir, controllerParam, controllerAddress]
+  if (controllerSecret) {
+    args.push('-secret', controllerSecret)
+  }
+
+  const proc = spawn(corePath, args, {
     detached,
     stdio: detached ? 'ignore' : undefined
   })
@@ -225,6 +250,29 @@ function spawnCoreProcess(config: CoreConfig): ChildProcess {
   }
 
   return proc
+}
+
+async function startMihomoRuntimeServices(logLevel: LogLevel): Promise<void> {
+  await waitForCoreReady({ maxRetries: 100, retryIntervalMs: 100, throwOnFailure: true })
+  await getAxios(true)
+  try {
+    await patchMihomoConfig({ 'log-level': logLevel })
+  } catch (error) {
+    managerLogger.warn('Failed to patch log level after core startup:', error)
+  }
+  await startMihomoTraffic()
+  await startMihomoMemory()
+  await startSubscribedMihomoStreams()
+  retry = 10
+}
+
+function createTimedProviderReadyPromise(): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      mainWindow?.webContents.send('groupsUpdated')
+      resolve()
+    }, 2000)
+  })
 }
 
 // 设置核心进程事件监听
@@ -287,17 +335,7 @@ function setupCoreListeners(
     if (startupTask) return
 
     startupTask = (async () => {
-      await waitForCoreReady({ maxRetries: 100, retryIntervalMs: 100, throwOnFailure: true })
-      await getAxios(true)
-      try {
-        await patchMihomoConfig({ 'log-level': logLevel })
-      } catch (error) {
-        managerLogger.warn('Failed to patch log level after core startup:', error)
-      }
-      await startMihomoTraffic()
-      await startMihomoMemory()
-      await startSubscribedMihomoStreams()
-      retry = 10
+      await startMihomoRuntimeServices(logLevel)
       resolveStartup([createProviderReadyPromise()])
     })()
 
@@ -320,7 +358,7 @@ function setupCoreListeners(
     // 控制器监听错误
     const isControllerError =
       (process.platform !== 'win32' && str.includes('External controller unix listen error')) ||
-      (process.platform === 'win32' && str.includes('External controller pipe listen error'))
+      (process.platform === 'win32' && str.includes('External controller listen error'))
 
     if (isControllerError) {
       managerLogger.error('External controller listen error detected:', str)
@@ -328,10 +366,10 @@ function setupCoreListeners(
       if (process.platform === 'win32') {
         managerLogger.info('Attempting Windows pipe cleanup and retry...')
         try {
-          await cleanupWindowsNamedPipes()
+          await stopWindowsElevatedCore()
           await new Promise((r) => setTimeout(r, 2000))
         } catch (cleanupError) {
-          managerLogger.error('Pipe cleanup failed:', cleanupError)
+          managerLogger.error('Windows elevated core cleanup failed:', cleanupError)
         }
       }
 
@@ -391,8 +429,33 @@ function setupCoreListeners(
 export async function startCore(detached = false, skipStop = false): Promise<Promise<void>[]> {
   const config = await prepareCore(detached, skipStop)
 
+  if (config.useWindowsElevatedTask) {
+    const [controllerHost, controllerPort] = config.controllerAddress.split(':')
+    const request: WindowsCoreHelperRequest = {
+      corePath: config.corePath,
+      workDir: config.workDir,
+      controllerHost,
+      controllerPort: Number(controllerPort),
+      secret: config.controllerSecret || '',
+      logPath: coreLogPath(),
+      cpuPriority: config.cpuPriority,
+      createdAt: Date.now()
+    }
+
+    await startWindowsElevatedCore(request)
+    coreLaunchMode = 'windows-elevated-task'
+    child = null
+    await startMihomoRuntimeServices(config.logLevel)
+    return [createTimedProviderReadyPromise()]
+  }
+
+  if (process.platform === 'win32') {
+    await stopWindowsElevatedCore()
+  }
+
   const proc = spawnCoreProcess(config)
   child = proc
+  coreLaunchMode = 'local'
 
   if (detached) {
     managerLogger.info(
@@ -411,11 +474,14 @@ export async function startCore(detached = false, skipStop = false): Promise<Pro
 export async function stopCore(force = false): Promise<void> {
   void force
 
-  if (child) {
+  if (coreLaunchMode === 'windows-elevated-task') {
+    await stopWindowsElevatedCore()
+  } else if (child) {
     child.removeAllListeners()
     child.kill('SIGINT')
     child = null
   }
+  coreLaunchMode = null
 
   stopMihomoTraffic()
   stopMihomoConnections()
@@ -428,7 +494,9 @@ export async function stopCore(force = false): Promise<void> {
     managerLogger.warn('Failed to refresh axios instance:', error)
   }
 
-  await cleanupSocketFile()
+  if (process.platform !== 'win32') {
+    await cleanupSocketFile()
+  }
 }
 
 setStopCoreBeforeAdminRestart(stopCore)

@@ -1,19 +1,11 @@
 import { execFileSync, execSync } from 'child_process'
 import { electronApp } from '@electron-toolkit/utils'
-import { app, dialog } from 'electron'
-import i18next from 'i18next'
+import { app } from 'electron'
 import { initI18n } from '../shared/i18n'
 import { registerIpcMainHandlers } from './utils/ipc'
-import { getAppConfig, getControledMihomoConfig, patchAppConfig } from './config'
-import {
-  startCore,
-  checkHighPrivilegeCore,
-  restartAsAdmin,
-  initAdminStatus,
-  checkAdminPrivileges,
-  getSessionAdminStatus,
-  initCoreWatcher
-} from './core/manager'
+import { getAppConfig, patchAppConfig } from './config'
+import { startCore, initAdminStatus, initCoreWatcher } from './core/manager'
+import { isWindowsCoreHelperProcess, runWindowsCoreHelper } from './core/windowsElevated'
 import { createTray } from './resolve/tray'
 import { init, initBasic, safeShowErrorBox } from './utils/init'
 import { initProfileUpdater } from './core/profileUpdater'
@@ -81,201 +73,131 @@ const mainLogger = createLogger('Main')
 
 export { mainWindow, showMainWindow, triggerMainWindow, closeMainWindow }
 
-const gotTheLock = app.requestSingleInstanceLock()
-if (!gotTheLock) {
-  app.quit()
-}
+if (isWindowsCoreHelperProcess()) {
+  app
+    .whenReady()
+    .then(runWindowsCoreHelper)
+    .catch((error) => {
+      mainLogger.error('Failed to run Windows core helper', error)
+      app.exit(1)
+    })
+} else {
+  const gotTheLock = app.requestSingleInstanceLock()
+  if (!gotTheLock) {
+    app.quit()
+  }
 
-async function initApp(): Promise<void> {
-  await fixUserDataPermissions()
-}
+  async function initApp(): Promise<void> {
+    await fixUserDataPermissions()
+  }
 
-initApp().catch((e) => {
-  safeShowErrorBox('common.error.initFailed', `${e}`)
-  app.quit()
-})
+  initApp().catch((e) => {
+    safeShowErrorBox('common.error.initFailed', `${e}`)
+    app.quit()
+  })
 
-setupPlatformSpecifics()
+  setupPlatformSpecifics()
 
-async function checkHighPrivilegeCoreEarly(): Promise<void> {
-  if (process.platform !== 'win32') return
+  async function initHardwareAcceleration(): Promise<void> {
+    try {
+      await initBasic()
+      const { disableHardwareAcceleration = false } = await getAppConfig()
+      if (disableHardwareAcceleration) {
+        app.disableHardwareAcceleration()
+      }
+    } catch (e) {
+      mainLogger.warn('Failed to read hardware acceleration config', e)
+    }
+  }
 
-  try {
+  initHardwareAcceleration()
+  setupAppLifecycle()
+
+  app.on('second-instance', async (_event, commandline) => {
+    showMainWindow()
+    const url = commandline.pop()
+    if (url) {
+      await handleDeepLink(url)
+    }
+  })
+
+  app.on('open-url', async (_event, url) => {
+    showMainWindow()
+    await handleDeepLink(url)
+  })
+
+  const initPromise = (async () => {
     await initBasic()
-    const isCurrentAppAdmin = await checkAdminPrivileges()
-    if (isCurrentAppAdmin) return
-
-    const hasHighPrivilegeCore = await checkHighPrivilegeCore()
-    if (!hasHighPrivilegeCore) return
+    await initAdminStatus()
 
     try {
       const appConfig = await getAppConfig()
-      const language = appConfig.language || (app.getLocale().startsWith('zh') ? 'zh-CN' : 'en-US')
-      await initI18n({ lng: language })
-    } catch {
-      await initI18n({ lng: 'zh-CN' })
+      if (!appConfig.language) {
+        const systemLanguage = getSystemLanguage()
+        await patchAppConfig({ language: systemLanguage })
+        appConfig.language = systemLanguage
+      }
+      await initI18n({ lng: appConfig.language })
+      return appConfig
+    } catch (e) {
+      safeShowErrorBox('common.error.initFailed', `${e}`)
+      app.quit()
+      throw e
     }
+  })()
 
-    const choice = dialog.showMessageBoxSync({
-      type: 'warning',
-      title: i18next.t('core.highPrivilege.title'),
-      message: i18next.t('core.highPrivilege.message'),
-      buttons: [i18next.t('common.confirm'), i18next.t('common.cancel')],
-      defaultId: 0,
-      cancelId: 1
+  app.whenReady().then(async () => {
+    electronApp.setAppUserModelId('lite.clash.app')
+
+    await initPromise
+
+    registerIpcMainHandlers()
+
+    const createWindowPromise = createWindow()
+    const runtimeInitPromise = init().catch((error) => {
+      mainLogger.error('Failed to initialize background services', error)
     })
 
-    if (choice === 0) {
+    let coreStarted = false
+    const coreStartPromise = (async (): Promise<void> => {
       try {
-        await restartAsAdmin()
-        app.exit(0)
-      } catch (error) {
-        safeShowErrorBox('common.error.adminRequired', `${error}`)
-        app.exit(1)
+        initCoreWatcher()
+        const startPromises = await startCore()
+        if (startPromises.length > 0) {
+          startPromises[0].then(async () => {
+            await initProfileUpdater()
+          })
+        }
+        coreStarted = true
+      } catch (e) {
+        safeShowErrorBox('mihomo.error.coreStartFailed', `${e}`)
       }
-    } else {
-      app.exit(0)
-    }
-  } catch (e) {
-    mainLogger.error('Failed to check high privilege core', e)
-  }
-}
+    })()
 
-async function ensureAdminForEnabledTunOnWindows(): Promise<boolean> {
-  if (process.platform !== 'win32') return true
-  if (getSessionAdminStatus()) return true
-
-  const mihomoConfig = await getControledMihomoConfig()
-  const tunEnabled = mihomoConfig.tun?.enable ?? true
-  if (!tunEnabled) return true
-
-  mainLogger.info('TUN is enabled without administrator privileges; requesting elevation')
-  const choice = dialog.showMessageBoxSync({
-    type: 'warning',
-    title: i18next.t('tun.permissions.title'),
-    message: i18next.t('tun.permissions.message'),
-    buttons: [i18next.t('common.confirm'), i18next.t('common.cancel')],
-    defaultId: 0,
-    cancelId: 1
-  })
-
-  if (choice === 0) {
-    try {
-      await restartAsAdmin()
-    } catch (error) {
-      safeShowErrorBox('common.error.adminRequired', `${error}`)
-      app.exit(1)
-    }
-    return false
-  }
-
-  mainLogger.info('User canceled administrator restart for enabled TUN; exiting before core start')
-  app.exit(0)
-  return false
-}
-
-async function initHardwareAcceleration(): Promise<void> {
-  try {
-    await initBasic()
-    const { disableHardwareAcceleration = false } = await getAppConfig()
-    if (disableHardwareAcceleration) {
-      app.disableHardwareAcceleration()
-    }
-  } catch (e) {
-    mainLogger.warn('Failed to read hardware acceleration config', e)
-  }
-}
-
-initHardwareAcceleration()
-setupAppLifecycle()
-
-app.on('second-instance', async (_event, commandline) => {
-  showMainWindow()
-  const url = commandline.pop()
-  if (url) {
-    await handleDeepLink(url)
-  }
-})
-
-app.on('open-url', async (_event, url) => {
-  showMainWindow()
-  await handleDeepLink(url)
-})
-
-const initPromise = (async () => {
-  await initBasic()
-  await checkHighPrivilegeCoreEarly()
-  await initAdminStatus()
-
-  try {
-    const appConfig = await getAppConfig()
-    if (!appConfig.language) {
-      const systemLanguage = getSystemLanguage()
-      await patchAppConfig({ language: systemLanguage })
-      appConfig.language = systemLanguage
-    }
-    await initI18n({ lng: appConfig.language })
-    return appConfig
-  } catch (e) {
-    safeShowErrorBox('common.error.initFailed', `${e}`)
-    app.quit()
-    throw e
-  }
-})()
-
-app.whenReady().then(async () => {
-  electronApp.setAppUserModelId('lite.clash.app')
-
-  await initPromise
-  const canContinueStartup = await ensureAdminForEnabledTunOnWindows()
-  if (!canContinueStartup) return
-
-  registerIpcMainHandlers()
-
-  const createWindowPromise = createWindow()
-  const runtimeInitPromise = init().catch((error) => {
-    mainLogger.error('Failed to initialize background services', error)
-  })
-
-  let coreStarted = false
-  const coreStartPromise = (async (): Promise<void> => {
-    try {
-      initCoreWatcher()
-      const startPromises = await startCore()
-      if (startPromises.length > 0) {
-        startPromises[0].then(async () => {
-          await initProfileUpdater()
-        })
+    const monitorPromise = (async (): Promise<void> => {
+      try {
+        await startMonitor()
+      } catch {
+        // ignore
       }
-      coreStarted = true
-    } catch (e) {
-      safeShowErrorBox('mihomo.error.coreStartFailed', `${e}`)
+    })()
+
+    await createWindowPromise
+
+    const uiTasks: Promise<void>[] = []
+
+    uiTasks.push(createTray())
+
+    await Promise.all(uiTasks)
+    void runtimeInitPromise
+    await Promise.all([coreStartPromise, monitorPromise])
+
+    if (coreStarted) {
+      mainWindow?.webContents.send('core-started')
     }
-  })()
 
-  const monitorPromise = (async (): Promise<void> => {
-    try {
-      await startMonitor()
-    } catch {
-      // ignore
-    }
-  })()
-
-  await createWindowPromise
-
-  const uiTasks: Promise<void>[] = []
-
-  uiTasks.push(createTray())
-
-  await Promise.all(uiTasks)
-  void runtimeInitPromise
-  await Promise.all([coreStartPromise, monitorPromise])
-
-  if (coreStarted) {
-    mainWindow?.webContents.send('core-started')
-  }
-
-  app.on('activate', () => {
-    showMainWindow()
+    app.on('activate', () => {
+      showMainWindow()
+    })
   })
-})
+}

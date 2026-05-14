@@ -1,4 +1,4 @@
-import axios, { AxiosInstance } from 'axios'
+import axios, { AxiosInstance, AxiosRequestConfig } from 'axios'
 import WebSocket from 'ws'
 import { getAppConfig, getControledMihomoConfig } from '../config'
 import { mainWindow } from '../window'
@@ -8,11 +8,12 @@ import { createLogger } from '../utils/logger'
 import { mihomoWorkConfigPath } from '../utils/dirs'
 import { generateProfile, getRuntimeConfig } from './factory'
 import { getMihomoIpcPath } from './manager'
+import { getWindowsControllerEndpoint } from './windowsElevated'
 
 const mihomoApiLogger = createLogger('MihomoApi')
 
 let axiosIns: AxiosInstance | null = null
-let currentIpcPath: string = ''
+let currentEndpointKey: string = ''
 let mihomoTrafficWs: WebSocket | null = null
 let trafficRetry = 10
 let mihomoMemoryWs: WebSocket | null = null
@@ -27,6 +28,51 @@ let logsStartToken = 0
 let connectionsStartToken = 0
 
 const MAX_RETRY = 10
+
+interface MihomoApiConnection {
+  key: string
+  displayKey: string
+  axiosConfig: AxiosRequestConfig
+  getWsUrl: (path: string) => string
+  wsOptions?: WebSocket.ClientOptions
+}
+
+async function getMihomoApiConnection(): Promise<MihomoApiConnection> {
+  if (process.platform === 'win32') {
+    const endpoint = await getWindowsControllerEndpoint()
+    const authHeaders = {
+      Authorization: `Bearer ${endpoint.secret}`
+    }
+    const baseURL = `http://${endpoint.host}:${endpoint.port}`
+
+    return {
+      key: `tcp:${baseURL}:${endpoint.secret}`,
+      displayKey: `tcp:${baseURL}`,
+      axiosConfig: {
+        baseURL,
+        timeout: 15000,
+        headers: authHeaders
+      },
+      getWsUrl: (path) => `ws://${endpoint.host}:${endpoint.port}${path}`,
+      wsOptions: {
+        headers: authHeaders
+      }
+    }
+  }
+
+  const socketPath = getMihomoIpcPath()
+
+  return {
+    key: `socket:${socketPath}`,
+    displayKey: `socket:${socketPath}`,
+    axiosConfig: {
+      baseURL: 'http://localhost',
+      socketPath,
+      timeout: 15000
+    },
+    getWsUrl: (path) => `ws+unix:${socketPath}:${path}`
+  }
+}
 
 function isWebSocketActive(ws: WebSocket | null): boolean {
   return ws?.readyState === WebSocket.OPEN || ws?.readyState === WebSocket.CONNECTING
@@ -61,20 +107,16 @@ function safelyDisposeWebSocket(ws: WebSocket | null): void {
 }
 
 export const getAxios = async (force: boolean = false): Promise<AxiosInstance> => {
-  const dynamicIpcPath = getMihomoIpcPath()
+  const connection = await getMihomoApiConnection()
 
-  if (axiosIns && !force && currentIpcPath === dynamicIpcPath) {
+  if (axiosIns && !force && currentEndpointKey === connection.key) {
     return axiosIns
   }
 
-  currentIpcPath = dynamicIpcPath
-  mihomoApiLogger.info(`Creating axios instance with path: ${dynamicIpcPath}`)
+  currentEndpointKey = connection.key
+  mihomoApiLogger.info(`Creating axios instance with endpoint: ${connection.displayKey}`)
 
-  axiosIns = axios.create({
-    baseURL: `http://localhost`,
-    socketPath: dynamicIpcPath,
-    timeout: 15000
-  })
+  axiosIns = axios.create(connection.axiosConfig)
 
   axiosIns.interceptors.response.use(
     (response) => {
@@ -84,7 +126,9 @@ export const getAxios = async (force: boolean = false): Promise<AxiosInstance> =
       if (error.code === 'ENOENT') {
         mihomoApiLogger.debug(`Pipe not ready: ${error.config?.socketPath}`)
       } else {
-        mihomoApiLogger.error(`Axios error with path ${dynamicIpcPath}: ${error.message}`)
+        mihomoApiLogger.error(
+          `Axios error with endpoint ${connection.displayKey}: ${error.message}`
+        )
       }
 
       if (error.response && error.response.data) {
@@ -227,11 +271,11 @@ export const stopMihomoTraffic = (): void => {
 }
 
 const mihomoTraffic = async (): Promise<void> => {
-  const dynamicIpcPath = getMihomoIpcPath()
-  const wsUrl = `ws+unix:${dynamicIpcPath}:/traffic`
+  const connection = await getMihomoApiConnection()
+  const wsUrl = connection.getWsUrl('/traffic')
 
   mihomoApiLogger.info(`Creating traffic WebSocket with URL: ${wsUrl}`)
-  mihomoTrafficWs = new WebSocket(wsUrl)
+  mihomoTrafficWs = new WebSocket(wsUrl, connection.wsOptions)
 
   mihomoTrafficWs.onmessage = async (e): Promise<void> => {
     const data = e.data as string
@@ -286,9 +330,9 @@ export const stopMihomoMemory = (): void => {
 }
 
 const mihomoMemory = async (): Promise<void> => {
-  const dynamicIpcPath = getMihomoIpcPath()
-  const wsUrl = `ws+unix:${dynamicIpcPath}:/memory`
-  mihomoMemoryWs = new WebSocket(wsUrl)
+  const connection = await getMihomoApiConnection()
+  const wsUrl = connection.getWsUrl('/memory')
+  mihomoMemoryWs = new WebSocket(wsUrl, connection.wsOptions)
 
   mihomoMemoryWs.onmessage = (e): void => {
     const data = e.data as string
@@ -355,13 +399,13 @@ const mihomoLogs = async (): Promise<void> => {
   const { 'log-level': logLevel = 'warning' } = await getControledMihomoConfig()
   if (startToken !== logsStartToken || !logsSubscribed) return
 
-  const dynamicIpcPath = getMihomoIpcPath()
-  const wsUrl = `ws+unix:${dynamicIpcPath}:/logs?level=${logLevel}`
+  const connection = await getMihomoApiConnection()
+  const wsUrl = connection.getWsUrl(`/logs?level=${logLevel}`)
   if (mihomoLogsWs && !isWebSocketActive(mihomoLogsWs)) {
     safelyDisposeWebSocket(mihomoLogsWs)
     mihomoLogsWs = null
   }
-  const ws = new WebSocket(wsUrl)
+  const ws = new WebSocket(wsUrl, connection.wsOptions)
 
   if (startToken !== logsStartToken || !logsSubscribed) {
     safelyDisposeWebSocket(ws)
@@ -448,13 +492,13 @@ export const stopMihomoConnections = (): void => {
 
 const mihomoConnections = async (): Promise<void> => {
   const startToken = connectionsStartToken
-  const dynamicIpcPath = getMihomoIpcPath()
-  const wsUrl = `ws+unix:${dynamicIpcPath}:/connections`
+  const connection = await getMihomoApiConnection()
+  const wsUrl = connection.getWsUrl('/connections')
   if (mihomoConnectionsWs && !isWebSocketActive(mihomoConnectionsWs)) {
     safelyDisposeWebSocket(mihomoConnectionsWs)
     mihomoConnectionsWs = null
   }
-  const ws = new WebSocket(wsUrl)
+  const ws = new WebSocket(wsUrl, connection.wsOptions)
 
   if (startToken !== connectionsStartToken || !connectionsSubscribed) {
     safelyDisposeWebSocket(ws)

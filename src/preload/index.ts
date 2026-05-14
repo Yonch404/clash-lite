@@ -56,9 +56,6 @@ const validInvokeChannels = [
   'quitWithoutCore',
   // System
   'triggerSysProxy',
-  'checkAdminPrivileges',
-  'restartAsAdmin',
-  'checkHighPrivilegeCore',
   'openUWPTool',
   'setupFirewall',
   'getInterfaces',
