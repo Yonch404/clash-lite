@@ -1,6 +1,8 @@
 !include LogicLib.nsh
 !include nsDialogs.nsh
 
+!ifdef BUILD_UNINSTALLER
+
 Var DeleteUserDataCheckbox
 Var DeleteUserData
 
@@ -52,3 +54,5 @@ FunctionEnd
     RMDir /r "$LOCALAPPDATA\Clash Lite"
   ${EndIf}
 !macroend
+
+!endif
