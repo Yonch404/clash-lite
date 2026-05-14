@@ -19,6 +19,16 @@ import { quitWithoutCore } from '../core/manager'
 
 export let tray: Tray | null = null
 type TrayImage = Electron.NativeImage | string
+let trayMenu: Menu | null = null
+
+function bindTrayMenuUpdater(): void {
+  ipcMain.removeListener('updateTrayMenu', handleUpdateTrayMenu)
+  ipcMain.on('updateTrayMenu', handleUpdateTrayMenu)
+}
+
+function handleUpdateTrayMenu(): void {
+  void updateTrayMenu()
+}
 
 export const buildContextMenu = async (): Promise<Menu> => {
   const { mode } = await getControledMihomoConfig()
@@ -194,10 +204,8 @@ export const buildContextMenu = async (): Promise<Menu> => {
 export async function createTray(): Promise<void> {
   const { useDockIcon = true } = await getAppConfig()
   tray = new Tray(createTrayImage())
-  if (process.platform === 'linux') {
-    const menu = await buildContextMenu()
-    tray.setContextMenu(menu)
-  }
+  await updateTrayMenu()
+  bindTrayMenuUpdater()
   await updateTrayToolTip()
   tray?.setIgnoreDoubleClickEvents(true)
 
@@ -211,26 +219,15 @@ export async function createTray(): Promise<void> {
     tray?.addListener('click', async () => {
       triggerMainWindow()
     })
-    tray?.addListener('right-click', async () => {
-      await updateTrayMenu()
-    })
   }
   if (process.platform === 'win32') {
     tray?.addListener('click', async () => {
       triggerMainWindow()
     })
-    tray?.addListener('right-click', async () => {
-      await updateTrayMenu()
-    })
   }
   if (process.platform === 'linux') {
     tray?.addListener('click', async () => {
       triggerMainWindow()
-    })
-    // 移除旧监听器防止累积
-    ipcMain.removeAllListeners('updateTrayMenu')
-    ipcMain.on('updateTrayMenu', async () => {
-      await updateTrayMenu()
     })
   }
 }
@@ -245,11 +242,11 @@ function createTrayImage(): TrayImage {
 }
 
 async function updateTrayMenu(): Promise<void> {
+  if (!tray) return
+
   const menu = await buildContextMenu()
-  tray?.popUpContextMenu(menu) // 弹出菜单
-  if (process.platform === 'linux') {
-    tray?.setContextMenu(menu)
-  }
+  trayMenu = menu
+  tray.setContextMenu(trayMenu)
 }
 
 export async function copyEnv(
