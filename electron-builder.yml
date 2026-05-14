@@ -39,7 +39,7 @@ nsis:
   include: build/installer.nsh
 linux:
   executableName: clash-lite
-  icon: build/app-icon.png
+  icon: build/icons/clash-lite.svg
   desktop:
     entry:
       Name: Clash Lite
