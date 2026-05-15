@@ -19,7 +19,8 @@ interface IpcApi {
   mihomoCloseConnection: (id: string) => Promise<void>
   mihomoCloseAllConnections: () => Promise<void>
   mihomoProxies: () => Promise<IMihomoProxies>
-  mihomoGroups: () => Promise<IMihomoMixedGroup[]>
+  mihomoGroupSummaries: () => Promise<IMihomoMixedGroupSummary[]>
+  mihomoGroupDetail: (group: string, force?: boolean) => Promise<IMihomoMixedGroup>
   mihomoProxyProviders: () => Promise<IMihomoProxyProviders>
   mihomoChangeProxy: (group: string, proxy: string) => Promise<IMihomoProxy>
   mihomoUpgrade: () => Promise<void>
@@ -113,7 +114,8 @@ export const {
   mihomoCloseConnection,
   mihomoCloseAllConnections,
   mihomoProxies,
-  mihomoGroups,
+  mihomoGroupSummaries,
+  mihomoGroupDetail,
   mihomoProxyProviders,
   mihomoChangeProxy,
   mihomoUpgrade,

@@ -7,7 +7,7 @@ interface Props {
   onProxyDelay: (proxy: string, url?: string) => Promise<IMihomoDelay>
   proxyDisplayMode: 'simple' | 'full'
   proxy: IMihomoProxy | IMihomoGroup
-  group: IMihomoMixedGroup
+  group: Pick<IMihomoGroup, 'name' | 'testUrl'>
   onSelect: (group: string, proxy: string) => void
   selected: boolean
   isGroupTesting?: boolean
@@ -145,6 +145,8 @@ const ProxyItem = React.memo(ProxyItemBase, (prevProps, nextProps) => {
   return (
     prevProps.proxy.name === nextProps.proxy.name &&
     prevProps.proxy.history === nextProps.proxy.history &&
+    prevProps.group.name === nextProps.group.name &&
+    prevProps.group.testUrl === nextProps.group.testUrl &&
     prevProps.selected === nextProps.selected &&
     prevProps.proxyDisplayMode === nextProps.proxyDisplayMode &&
     prevProps.isGroupTesting === nextProps.isGroupTesting

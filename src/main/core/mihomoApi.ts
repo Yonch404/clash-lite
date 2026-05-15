@@ -115,6 +115,7 @@ export const getAxios = async (force: boolean = false): Promise<AxiosInstance> =
     return axiosIns
   }
 
+  invalidateVisibleMihomoGroupsDataCache()
   currentEndpointKey = connection.key
   mihomoApiLogger.info(`Creating axios instance with endpoint: ${connection.displayKey}`)
 
@@ -148,6 +149,7 @@ export async function mihomoVersion(): Promise<IMihomoVersion> {
 }
 
 export const patchMihomoConfig = async (patch: Partial<IMihomoConfig>): Promise<void> => {
+  invalidateVisibleMihomoGroupsDataCache()
   const instance = await getAxios()
   return await instance.patch('/configs', patch)
 }
@@ -171,33 +173,145 @@ export const mihomoProxies = async (): Promise<IMihomoProxies> => {
   return proxies
 }
 
-export const mihomoGroups = async (): Promise<IMihomoMixedGroup[]> => {
-  const { mode = 'rule' } = await getControledMihomoConfig()
-  if (mode === 'direct') return []
-  const proxies = await mihomoProxies()
-  const runtime = await getRuntimeConfig()
-  const groups: IMihomoMixedGroup[] = []
-  runtime?.['proxy-groups']?.forEach((group: { name: string; url?: string }) => {
-    const { name, url } = group
-    if (proxies.proxies[name] && 'all' in proxies.proxies[name] && !proxies.proxies[name].hidden) {
-      const newGroup = proxies.proxies[name]
-      newGroup.testUrl = url
-      const newAll = (newGroup.all || []).map((name) => proxies.proxies[name])
-      groups.push({ ...newGroup, all: newAll })
+interface MihomoRuntimeGroup {
+  name: string
+  url?: string
+}
+
+interface VisibleMihomoGroupsData {
+  entries: { group: IMihomoGroup; testUrl?: string }[]
+  proxies: IMihomoProxies | null
+}
+
+const VISIBLE_GROUP_DATA_CACHE_MS = 2000
+
+let visibleMihomoGroupsDataRequest: Promise<VisibleMihomoGroupsData> | null = null
+let visibleMihomoGroupsDataCache: {
+  data: VisibleMihomoGroupsData
+  expiresAt: number
+} | null = null
+let visibleMihomoGroupsDataCacheVersion = 0
+
+function invalidateVisibleMihomoGroupsDataCache(): void {
+  visibleMihomoGroupsDataCacheVersion++
+  visibleMihomoGroupsDataRequest = null
+  visibleMihomoGroupsDataCache = null
+}
+
+function getVisibleGroupEntries(
+  proxies: IMihomoProxies,
+  runtimeGroups: MihomoRuntimeGroup[] | undefined,
+  mode: OutboundMode
+): { group: IMihomoGroup; testUrl?: string }[] {
+  const groups: { group: IMihomoGroup; testUrl?: string }[] = []
+
+  runtimeGroups?.forEach(({ name, url }) => {
+    const group = proxies.proxies[name]
+    if (group && 'all' in group && !group.hidden) {
+      groups.push({ group, testUrl: url })
     }
   })
-  if (!groups.find((group) => group.name === 'GLOBAL')) {
-    const newGlobal = proxies.proxies['GLOBAL'] as IMihomoGroup
-    if (!newGlobal.hidden) {
-      const newAll = (newGlobal.all || []).map((name) => proxies.proxies[name])
-      groups.push({ ...newGlobal, all: newAll })
+
+  if (!groups.find(({ group }) => group.name === 'GLOBAL')) {
+    const global = proxies.proxies['GLOBAL']
+    if (global && 'all' in global && !global.hidden) {
+      groups.push({ group: global })
     }
   }
+
   if (mode === 'global') {
-    const global = groups.findIndex((group) => group.name === 'GLOBAL')
-    groups.unshift(groups.splice(global, 1)[0])
+    const globalIndex = groups.findIndex(({ group }) => group.name === 'GLOBAL')
+    if (globalIndex > 0) {
+      groups.unshift(groups.splice(globalIndex, 1)[0])
+    }
   }
+
   return groups
+}
+
+async function loadVisibleMihomoGroupsData(): Promise<VisibleMihomoGroupsData> {
+  const { mode = 'rule' } = await getControledMihomoConfig()
+  if (mode === 'direct') return { entries: [], proxies: null }
+
+  const proxies = await mihomoProxies()
+  const runtime = await getRuntimeConfig()
+  return { entries: getVisibleGroupEntries(proxies, runtime?.['proxy-groups'], mode), proxies }
+}
+
+function cacheVisibleMihomoGroupsData(
+  data: VisibleMihomoGroupsData,
+  version: number
+): VisibleMihomoGroupsData {
+  if (version !== visibleMihomoGroupsDataCacheVersion) return data
+
+  visibleMihomoGroupsDataCache = {
+    data,
+    expiresAt: Date.now() + VISIBLE_GROUP_DATA_CACHE_MS
+  }
+  return data
+}
+
+async function loadAndCacheVisibleMihomoGroupsData(): Promise<VisibleMihomoGroupsData> {
+  if (visibleMihomoGroupsDataRequest) return visibleMihomoGroupsDataRequest
+
+  const version = visibleMihomoGroupsDataCacheVersion
+  const request = loadVisibleMihomoGroupsData().then((data) => {
+    if (version !== visibleMihomoGroupsDataCacheVersion) {
+      return loadAndCacheVisibleMihomoGroupsData()
+    }
+    return cacheVisibleMihomoGroupsData(data, version)
+  })
+  visibleMihomoGroupsDataRequest = request
+
+  try {
+    return await request
+  } finally {
+    if (visibleMihomoGroupsDataRequest === request) {
+      visibleMihomoGroupsDataRequest = null
+    }
+  }
+}
+
+async function getVisibleMihomoGroupsData(force = false): Promise<VisibleMihomoGroupsData> {
+  const cache = visibleMihomoGroupsDataCache
+  if (!force && cache && cache.expiresAt > Date.now()) {
+    return cache.data
+  }
+
+  if (force) {
+    invalidateVisibleMihomoGroupsDataCache()
+    const version = visibleMihomoGroupsDataCacheVersion
+    return cacheVisibleMihomoGroupsData(await loadVisibleMihomoGroupsData(), version)
+  }
+
+  return await loadAndCacheVisibleMihomoGroupsData()
+}
+
+export const mihomoGroupSummaries = async (): Promise<IMihomoMixedGroupSummary[]> => {
+  const { entries } = await loadAndCacheVisibleMihomoGroupsData()
+  return entries.map(({ group, testUrl }) => {
+    const { all, ...summary } = group
+    return {
+      ...summary,
+      testUrl,
+      allCount: all?.length ?? 0
+    }
+  })
+}
+
+export const mihomoGroupDetail = async (
+  groupName: string,
+  force = false
+): Promise<IMihomoMixedGroup> => {
+  const { entries, proxies } = await getVisibleMihomoGroupsData(force)
+  const entry = entries.find(({ group }) => group.name === groupName)
+
+  if (!entry || !proxies) {
+    throw new Error(`Proxy group not found: ${groupName}`)
+  }
+
+  const all = (entry.group.all || []).map((name) => proxies.proxies[name]).filter(Boolean)
+  return { ...entry.group, testUrl: entry.testUrl, all }
 }
 
 export const mihomoProxyProviders = async (): Promise<IMihomoProxyProviders> => {
@@ -248,6 +362,7 @@ export const mihomoUpgrade = async (): Promise<void> => {
 }
 
 export const mihomoHotReloadConfig = async (): Promise<void> => {
+  invalidateVisibleMihomoGroupsDataCache()
   mihomoApiLogger.info('mihomoHotReloadConfig called')
   const current = await generateProfile()
   const { diffWorkDir = false } = await getAppConfig()

@@ -169,6 +169,10 @@ interface IMihomoMixedGroup extends IMihomoGroup {
   all: (IMihomoProxy | IMihomoGroup)[]
 }
 
+type IMihomoMixedGroupSummary = Omit<IMihomoGroup, 'all'> & {
+  allCount: number
+}
+
 interface IMihomoProxyProviders {
   providers: Record<string, IMihomoProxyProvider>
 }
