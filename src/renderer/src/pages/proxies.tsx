@@ -22,7 +22,7 @@ import {
   useCallback,
   type CSSProperties
 } from 'react'
-import { GroupedVirtuoso, GroupedVirtuosoHandle } from 'react-virtuoso'
+import { Virtuoso, VirtuosoHandle } from 'react-virtuoso'
 import type { Components, ContextProp, ScrollerProps } from 'react-virtuoso'
 import ProxyItem from '@renderer/components/proxies/proxy-item'
 import { IoIosArrowBack } from 'react-icons/io'
@@ -36,7 +36,6 @@ const GROUP_EXPAND_STATE_KEY = 'proxy_group_expand_state'
 const EMPTY_GROUPS: IMihomoMixedGroupSummary[] = []
 const PROXY_GROUP_ROW_HEIGHT = 64
 const PROXY_ITEM_ROW_HEIGHT = 80
-const EMPTY_PROXY_ITEM_ROW_HEIGHT = 1
 const DETAIL_PREFETCH_COUNT = 2
 const proxyGroupIconCache = new Map<string, string>()
 const pendingProxyGroupIconRequests = new Set<string>()
@@ -66,6 +65,39 @@ interface ProxyGroupHeaderProps {
   onGroupDelay: (groupName: string) => void
 }
 
+interface ProxyRowProps {
+  proxies: (IMihomoProxy | IMihomoGroup)[]
+  groupName: string
+  groupTestUrl?: string
+  selectedProxyName: string
+  proxyDisplayMode: 'simple' | 'full'
+  proxyCols: IAppConfig['proxyCols']
+  proxyGridStyle?: CSSProperties
+  isGroupTesting: boolean
+  onProxyDelay: (group: string, proxy: string, url?: string) => Promise<IMihomoDelay>
+  onSelect: (group: string, proxy: string) => void
+}
+
+interface ProxyListLayout {
+  rows: ProxyListRow[]
+  groupRowOffsets: number[]
+  totalProxyRows: number
+}
+
+type ProxyListRow =
+  | {
+      type: 'group'
+      key: string
+      groupIndex: number
+    }
+  | {
+      type: 'proxy-row'
+      key: string
+      groupIndex: number
+      proxies: (IMihomoProxy | IMihomoGroup)[]
+      selectedProxyName: string
+    }
+
 const ProxiesScroller = forwardRef<
   HTMLDivElement,
   ScrollerProps & ContextProp<ProxiesVirtuosoContext>
@@ -80,7 +112,7 @@ const ProxiesScroller = forwardRef<
 
 ProxiesScroller.displayName = 'ProxiesScroller'
 
-const virtuosoComponents: Components<unknown, ProxiesVirtuosoContext> = {
+const virtuosoComponents: Components<ProxyListRow, ProxiesVirtuosoContext> = {
   Footer: () => <div className="h-2" />,
   Scroller: ProxiesScroller
 }
@@ -132,11 +164,197 @@ function getProxyGroupIconSrc(
 
 function isGroupDetailFresh(detail: IMihomoMixedGroup, summary: IMihomoMixedGroupSummary): boolean {
   return (
-    detail.now === summary.now &&
     detail.type === summary.type &&
     detail.testUrl === summary.testUrl &&
     detail.all.length === summary.allCount
   )
+}
+
+function canKeepGroupDetail(detail: IMihomoMixedGroup, summary: IMihomoMixedGroupSummary): boolean {
+  return (
+    detail.name === summary.name &&
+    detail.type === summary.type &&
+    detail.testUrl === summary.testUrl
+  )
+}
+
+function lastHistoryValue(history: IMihomoHistory[]): IMihomoHistory | undefined {
+  return history[history.length - 1]
+}
+
+function hasSameVisibleDelay(previous: IMihomoHistory[], next: IMihomoHistory[]): boolean {
+  const previousLatest = lastHistoryValue(previous)
+  const nextLatest = lastHistoryValue(next)
+
+  if (!previousLatest || !nextLatest) return previousLatest === nextLatest
+
+  return previousLatest.delay === nextLatest.delay
+}
+
+function getProxyFlag(proxy: IMihomoProxy | IMihomoGroup, key: keyof IMihomoProxy): boolean {
+  return Boolean((proxy as IMihomoProxy)[key])
+}
+
+function hasSameProxyDisplayData(
+  previous: IMihomoProxy | IMihomoGroup,
+  next: IMihomoProxy | IMihomoGroup
+): boolean {
+  return (
+    previous.name === next.name &&
+    previous.type === next.type &&
+    previous.alive === next.alive &&
+    previous.tfo === next.tfo &&
+    previous.udp === next.udp &&
+    previous.xudp === next.xudp &&
+    getProxyFlag(previous, 'mptcp') === getProxyFlag(next, 'mptcp') &&
+    getProxyFlag(previous, 'smux') === getProxyFlag(next, 'smux') &&
+    hasSameVisibleDelay(previous.history, next.history)
+  )
+}
+
+function hasSameProxyArray(
+  previous: (IMihomoProxy | IMihomoGroup)[],
+  next: (IMihomoProxy | IMihomoGroup)[]
+): boolean {
+  if (previous.length !== next.length) return false
+  return previous.every((proxy, index) => hasSameProxyDisplayData(proxy, next[index]))
+}
+
+function mergeProxyList(
+  previous: (IMihomoProxy | IMihomoGroup)[],
+  next: (IMihomoProxy | IMihomoGroup)[]
+): (IMihomoProxy | IMihomoGroup)[] {
+  const previousByName = new Map(previous.map((proxy) => [proxy.name, proxy]))
+  let changed = previous.length !== next.length
+
+  const merged = next.map((proxy, index) => {
+    const previousProxy = previousByName.get(proxy.name)
+
+    if (previousProxy && hasSameProxyDisplayData(previousProxy, proxy)) {
+      if (previousProxy !== previous[index]) {
+        changed = true
+      }
+      return previousProxy
+    }
+
+    changed = true
+    return proxy
+  })
+
+  return changed ? merged : previous
+}
+
+function hasSameGroupShell(previous: IMihomoMixedGroup, next: IMihomoMixedGroup): boolean {
+  return (
+    previous.alive === next.alive &&
+    previous.expectedStatus === next.expectedStatus &&
+    previous.hidden === next.hidden &&
+    previous.icon === next.icon &&
+    previous.name === next.name &&
+    previous.now === next.now &&
+    previous.testUrl === next.testUrl &&
+    previous.tfo === next.tfo &&
+    previous.type === next.type &&
+    previous.udp === next.udp &&
+    previous.xudp === next.xudp &&
+    hasSameVisibleDelay(previous.history, next.history)
+  )
+}
+
+function mergeGroupDetail(
+  previous: IMihomoMixedGroup | undefined,
+  next: IMihomoMixedGroup
+): IMihomoMixedGroup {
+  if (!previous) return next
+
+  const all = mergeProxyList(previous.all, next.all)
+  if (all === previous.all && hasSameGroupShell(previous, next)) {
+    return previous
+  }
+
+  return { ...next, all }
+}
+
+function updateGroupProxyDelay(
+  detail: IMihomoMixedGroup,
+  proxyName: string,
+  delay: number
+): IMihomoMixedGroup {
+  let changed = false
+  const historyEntry = { time: new Date().toISOString(), delay }
+  const all = detail.all.map((proxy) => {
+    if (proxy.name !== proxyName) return proxy
+
+    changed = true
+    return {
+      ...proxy,
+      history: [...proxy.history, historyEntry]
+    }
+  })
+
+  return changed ? { ...detail, all } : detail
+}
+
+function applySummaryToGroupDetail(
+  detail: IMihomoMixedGroup,
+  summary: IMihomoMixedGroupSummary
+): IMihomoMixedGroup {
+  const { allCount: _allCount, ...summaryFields } = summary
+  const next = { ...detail, ...summaryFields, all: detail.all }
+  return hasSameGroupShell(detail, next) ? detail : next
+}
+
+function areArraysEqual<T>(previous: T[], next: T[]): boolean {
+  if (previous.length !== next.length) return false
+  return previous.every((value, index) => value === next[index])
+}
+
+function useStableProxyListLayout(layout: ProxyListLayout): ProxyListLayout {
+  const previousRef = useRef<ProxyListLayout | null>(null)
+
+  return useMemo(() => {
+    const previous = previousRef.current
+
+    if (
+      previous &&
+      previous.totalProxyRows === layout.totalProxyRows &&
+      areArraysEqual(
+        previous.rows.map((row) => row.key),
+        layout.rows.map((row) => row.key)
+      ) &&
+      areArraysEqual(previous.groupRowOffsets, layout.groupRowOffsets)
+    ) {
+      const previousRowsByKey = new Map(previous.rows.map((row) => [row.key, row]))
+      const rows = layout.rows.map((row) => {
+        const previousRow = previousRowsByKey.get(row.key)
+        if (!previousRow || previousRow.type !== row.type) return row
+
+        if (row.type === 'group' && previousRow.type === 'group') {
+          return previousRow.groupIndex === row.groupIndex ? previousRow : row
+        }
+
+        if (row.type === 'proxy-row' && previousRow.type === 'proxy-row') {
+          const sameRow =
+            previousRow.groupIndex === row.groupIndex &&
+            hasSameProxyArray(previousRow.proxies, row.proxies) &&
+            previousRow.selectedProxyName === row.selectedProxyName
+          return sameRow ? previousRow : row
+        }
+
+        return row
+      })
+      const stableLayout = {
+        ...layout,
+        rows,
+        groupRowOffsets: previous.groupRowOffsets
+      }
+      previousRef.current = stableLayout
+      return stableLayout
+    }
+
+    previousRef.current = layout
+    return layout
+  }, [layout])
 }
 
 function scheduleIdleTask(callback: () => void): () => void {
@@ -246,15 +464,84 @@ const ProxyGroupHeader = memo(function ProxyGroupHeader(props: ProxyGroupHeaderP
   )
 })
 
+function getRowSelectedProxyName(
+  proxies: (IMihomoProxy | IMihomoGroup)[],
+  currentProxyName: string
+): string {
+  for (const proxy of proxies) {
+    if (proxy?.name === currentProxyName) return currentProxyName
+  }
+
+  return ''
+}
+
+const ProxyRow = memo(
+  function ProxyRow(props: ProxyRowProps) {
+    const {
+      proxies,
+      groupName,
+      groupTestUrl,
+      selectedProxyName,
+      proxyDisplayMode,
+      proxyCols,
+      proxyGridStyle,
+      isGroupTesting,
+      onProxyDelay,
+      onSelect
+    } = props
+
+    return (
+      <div
+        style={proxyGridStyle}
+        className={`grid ${proxyCols === 'auto' ? 'sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5' : ''} gap-2 pt-2 mx-2`}
+      >
+        {proxies.map((proxy) => {
+          return (
+            <ProxyItem
+              key={proxy.name}
+              onProxyDelay={onProxyDelay}
+              onSelect={onSelect}
+              proxy={proxy}
+              group={{ name: groupName, testUrl: groupTestUrl }}
+              proxyDisplayMode={proxyDisplayMode}
+              selected={proxy.name === selectedProxyName}
+              isGroupTesting={isGroupTesting}
+            />
+          )
+        })}
+      </div>
+    )
+  },
+  (prevProps, nextProps) => {
+    if (
+      prevProps.groupName !== nextProps.groupName ||
+      prevProps.groupTestUrl !== nextProps.groupTestUrl ||
+      prevProps.proxyDisplayMode !== nextProps.proxyDisplayMode ||
+      prevProps.proxyCols !== nextProps.proxyCols ||
+      prevProps.proxyGridStyle !== nextProps.proxyGridStyle ||
+      prevProps.isGroupTesting !== nextProps.isGroupTesting ||
+      prevProps.onProxyDelay !== nextProps.onProxyDelay ||
+      prevProps.onSelect !== nextProps.onSelect ||
+      prevProps.selectedProxyName !== nextProps.selectedProxyName
+    ) {
+      return false
+    }
+
+    return hasSameProxyArray(prevProps.proxies, nextProps.proxies)
+  }
+)
+
+ProxyRow.displayName = 'ProxyRow'
+
 // 自定义 hook 用于管理展开状态
 const useProxyState = (
   groups: IMihomoMixedGroupSummary[]
 ): {
-  virtuosoRef: React.RefObject<GroupedVirtuosoHandle | null>
+  virtuosoRef: React.RefObject<VirtuosoHandle | null>
   isOpen: BooleanMap
   setIsOpen: React.Dispatch<React.SetStateAction<BooleanMap>>
 } => {
-  const virtuosoRef = useRef<GroupedVirtuosoHandle | null>(null)
+  const virtuosoRef = useRef<VirtuosoHandle | null>(null)
   const groupNamesKey = useMemo(() => groups.map((group) => group.name).join('\n'), [groups])
   const groupsRef = useRef(groups)
   groupsRef.current = groups
@@ -281,7 +568,6 @@ const Proxies: React.FC = () => {
   const { groups, mutate } = useGroups()
   const proxyGroups = groups ?? EMPTY_GROUPS
   const groupsReady = groups !== undefined
-  const groupCount = proxyGroups.length
   const groupNamesKey = useMemo(
     () => proxyGroups.map((group) => group.name).join('\n'),
     [proxyGroups]
@@ -312,6 +598,8 @@ const Proxies: React.FC = () => {
   const groupDetailRequestVersionsRef = useRef(new Map<string, number>())
   const groupDetailRequestVersionRef = useRef(0)
   const groupDetailGenerationRef = useRef(0)
+  const staleGroupDetailsRef = useRef(new Set<string>())
+  const [groupDetailRefreshTick, setGroupDetailRefreshTick] = useState(0)
 
   useEffect(() => {
     groupDetailsRef.current = groupDetails
@@ -327,14 +615,24 @@ const Proxies: React.FC = () => {
 
   useEffect(() => {
     const groupSummaries = new Map(proxyGroups.map((group) => [group.name, group]))
+    for (const groupName of Array.from(staleGroupDetailsRef.current)) {
+      if (!groupSummaries.has(groupName)) {
+        staleGroupDetailsRef.current.delete(groupName)
+      }
+    }
+
     setGroupDetails((prev) => {
       let changed = false
       const next: Record<string, IMihomoMixedGroup | undefined> = {}
 
       for (const [groupName, detail] of Object.entries(prev)) {
         const summary = groupSummaries.get(groupName)
-        if (summary && detail && isGroupDetailFresh(detail, summary)) {
-          next[groupName] = detail
+        if (summary && detail && canKeepGroupDetail(detail, summary)) {
+          const syncedDetail = applySummaryToGroupDetail(detail, summary)
+          next[groupName] = syncedDetail
+          if (syncedDetail !== detail) {
+            changed = true
+          }
         } else {
           changed = true
         }
@@ -364,6 +662,7 @@ const Proxies: React.FC = () => {
         const isLatestRequest =
           groupDetailRequestVersionsRef.current.get(groupName) === requestVersion
         if (isLatestRequest && generation === groupDetailGenerationRef.current) {
+          staleGroupDetailsRef.current.delete(groupName)
           startTransition(() => {
             setGroupDetails((prev) => {
               if (
@@ -373,7 +672,14 @@ const Proxies: React.FC = () => {
                 return prev
               }
 
-              return { ...prev, [groupName]: detail }
+              const previousDetail = prev[groupName]
+              const mergedDetail = mergeGroupDetail(previousDetail, detail)
+
+              if (previousDetail === mergedDetail) {
+                return prev
+              }
+
+              return { ...prev, [groupName]: mergedDetail }
             })
           })
         }
@@ -403,7 +709,8 @@ const Proxies: React.FC = () => {
       groupDetailGenerationRef.current++
       groupDetailRequestsRef.current.clear()
       groupDetailRequestVersionsRef.current.clear()
-      setGroupDetails({})
+      staleGroupDetailsRef.current = new Set(Object.keys(groupDetailsRef.current))
+      setGroupDetailRefreshTick((tick) => tick + 1)
     }
 
     window.electron.ipcRenderer.on('groupsUpdated', handler)
@@ -482,16 +789,18 @@ const Proxies: React.FC = () => {
     }
   }, [proxyGroups])
 
-  const { groupCounts, allProxies, groupRowOffsets, flatItemKeys, totalProxyRows } = useMemo(() => {
-    const groupCounts: number[] = []
-    const allProxies: (IMihomoProxy | IMihomoGroup)[][] = []
+  const proxyListLayout = useMemo<ProxyListLayout>(() => {
+    const rows: ProxyListRow[] = []
     const groupRowOffsets: number[] = []
-    const flatItemKeys: string[] = []
     let totalProxyRows = 0
 
-    proxyGroups.forEach((group) => {
-      groupRowOffsets.push(totalProxyRows)
-      flatItemKeys.push(`group:${group.name}`)
+    proxyGroups.forEach((group, groupIndex) => {
+      rows.push({
+        type: 'group',
+        key: `group:${group.name}`,
+        groupIndex
+      })
+      groupRowOffsets.push(rows.length)
 
       const groupDetail = groupDetails[group.name]
       if (isOpen[group.name] && groupDetail) {
@@ -500,39 +809,46 @@ const Proxies: React.FC = () => {
           ? groupDetail.all.filter((proxy) => includesIgnoreCase(proxy.name, filterValue))
           : groupDetail.all
         const count = Math.ceil(filtered.length / cols)
-        groupCounts.push(count)
-        allProxies.push(filtered)
         for (let rowIndex = 0; rowIndex < count; rowIndex++) {
-          flatItemKeys.push(`proxy-row:${group.name}:${rowIndex}`)
+          const rowStart = rowIndex * cols
+          const currentProxyName = groupDetail.now ?? group.now
+          const rowProxies = filtered.slice(rowStart, rowStart + cols)
+          rows.push({
+            type: 'proxy-row',
+            key: `proxy-row:${group.name}:${rowIndex}`,
+            groupIndex,
+            proxies: rowProxies,
+            selectedProxyName: getRowSelectedProxyName(rowProxies, currentProxyName)
+          })
         }
         totalProxyRows += count
-      } else {
-        groupCounts.push(0)
-        allProxies.push([])
       }
     })
-    return { groupCounts, allProxies, groupRowOffsets, flatItemKeys, totalProxyRows }
+    return { rows, groupRowOffsets, totalProxyRows }
   }, [proxyGroups, groupDetails, isOpen, cols, searchValue])
+  const { rows, groupRowOffsets, totalProxyRows } = useStableProxyListLayout(proxyListLayout)
   const groupIndexByName = useMemo(() => {
     return new Map(proxyGroups.map((group, index) => [group.name, index]))
   }, [proxyGroups])
 
   useEffect(() => {
     for (const group of proxyGroups) {
-      if (isOpen[group.name] && !groupDetails[group.name]) {
-        void ensureGroupDetail(group.name)
+      if (!isOpen[group.name]) continue
+
+      const detail = groupDetails[group.name]
+      const needsRefresh =
+        !detail ||
+        staleGroupDetailsRef.current.has(group.name) ||
+        !isGroupDetailFresh(detail, group)
+
+      if (needsRefresh) {
+        void ensureGroupDetail(group.name, Boolean(detail)).catch((error) => {
+          console.error('Failed to refresh proxy group detail:', error)
+        })
       }
     }
-  }, [ensureGroupDetail, groupDetails, isOpen, proxyGroups])
+  }, [ensureGroupDetail, groupDetailRefreshTick, groupDetails, isOpen, proxyGroups])
 
-  const initialItemCount = useMemo(() => {
-    if (groupCount === 0) return 0
-
-    // In GroupedVirtuoso, initialItemCount counts item rows, not group headers.
-    // Cap it by the actual row count so the first pass does not create
-    // transient empty rows that briefly show a scrollbar and then disappear.
-    return totalProxyRows > 0 ? Math.min(groupCount, totalProxyRows) : 1
-  }, [groupCount, totalProxyRows])
   const hasProxyRows = totalProxyRows > 0
   const [virtuosoMeasured, setVirtuosoMeasured] = useState(false)
   const hideVirtuosoScrollbar = !hasProxyRows && !virtuosoMeasured
@@ -555,26 +871,53 @@ const Proxies: React.FC = () => {
     })
   }, [hasProxyRows, virtuosoMeasured])
 
-  const computeProxyItemKey = useCallback(
-    (flatIndex: number): string => {
-      return flatItemKeys[flatIndex] || `unknown:${flatIndex}`
-    },
-    [flatItemKeys]
-  )
+  const computeProxyItemKey = useCallback((_index: number, row: ProxyListRow): string => {
+    return row.key
+  }, [])
 
   const onChangeProxy = useCallback(
     async (group: string, proxy: string): Promise<void> => {
       await mihomoChangeProxy(group, proxy)
+      setGroupDetails((prev) => {
+        const detail = prev[group]
+        if (!detail || detail.now === proxy) return prev
+
+        return {
+          ...prev,
+          [group]: {
+            ...detail,
+            now: proxy
+          }
+        }
+      })
+
       await mihomoCloseAllConnections()
-      await ensureGroupDetail(group, true)
-      mutate()
+      void ensureGroupDetail(group, true).catch((error) => {
+        console.error('Failed to refresh proxy group detail:', error)
+      })
     },
-    [ensureGroupDetail, mutate]
+    [ensureGroupDetail]
   )
 
-  const onProxyDelay = useCallback(async (proxy: string, url?: string): Promise<IMihomoDelay> => {
-    return await mihomoProxyDelay(proxy, url)
-  }, [])
+  const onProxyDelay = useCallback(
+    async (group: string, proxy: string, url?: string): Promise<IMihomoDelay> => {
+      const result = await mihomoProxyDelay(proxy, url)
+      if (typeof result.delay === 'number') {
+        setGroupDetails((prev) => {
+          const detail = prev[group]
+          if (!detail) return prev
+
+          const nextDetail = updateGroupProxyDelay(detail, proxy, result.delay as number)
+          if (nextDetail === detail) return prev
+
+          return { ...prev, [group]: nextDetail }
+        })
+      }
+      await ensureGroupDetail(group, true)
+      return result
+    },
+    [ensureGroupDetail]
+  )
 
   const onToggleGroup = useCallback(
     (groupName: string): void => {
@@ -694,28 +1037,49 @@ const Proxies: React.FC = () => {
     }
   }, [calcCols])
 
-  const renderGroupContent = useCallback(
-    (index: number) => {
-      const group = proxyGroups[index]
-      if (!group) return <div>Never See This</div>
+  const renderRowContent = useCallback(
+    (_index: number, row: ProxyListRow) => {
+      const group = proxyGroups[row.groupIndex]
+      if (!group) return <div className="h-px" aria-hidden="true" />
+
+      if (row.type === 'group') {
+        return (
+          <ProxyGroupHeader
+            group={group}
+            iconSrc={getProxyGroupIconSrc(group.icon, iconSources)}
+            isOpen={Boolean(isOpen[group.name])}
+            isDelaying={Boolean(delaying[group.name])}
+            currentProxyName={groupDetails[group.name]?.now ?? group.now}
+            searchValue={searchValue[group.name] ?? ''}
+            proxyDisplayMode={proxyDisplayMode}
+            searchPlaceholder={t('proxies.search.placeholder')}
+            locateTitle={t('proxies.locate')}
+            delayTestTitle={t('proxies.delay.test')}
+            onToggle={onToggleGroup}
+            onWarmUp={warmUpGroupDetail}
+            onSearchChange={onSearchGroup}
+            onLocate={onLocateGroupProxy}
+            onGroupDelay={onGroupDelay}
+          />
+        )
+      }
+
+      if (row.proxies.length === 0) {
+        return <div className="h-px" aria-hidden="true" />
+      }
 
       return (
-        <ProxyGroupHeader
-          group={group}
-          iconSrc={getProxyGroupIconSrc(group.icon, iconSources)}
-          isOpen={Boolean(isOpen[group.name])}
-          isDelaying={Boolean(delaying[group.name])}
-          currentProxyName={groupDetails[group.name]?.now ?? group.now}
-          searchValue={searchValue[group.name] ?? ''}
+        <ProxyRow
+          proxies={row.proxies}
+          groupName={group.name}
+          groupTestUrl={group.testUrl}
+          selectedProxyName={row.selectedProxyName}
           proxyDisplayMode={proxyDisplayMode}
-          searchPlaceholder={t('proxies.search.placeholder')}
-          locateTitle={t('proxies.locate')}
-          delayTestTitle={t('proxies.delay.test')}
-          onToggle={onToggleGroup}
-          onWarmUp={warmUpGroupDetail}
-          onSearchChange={onSearchGroup}
-          onLocate={onLocateGroupProxy}
-          onGroupDelay={onGroupDelay}
+          proxyCols={proxyCols}
+          proxyGridStyle={proxyGridStyle}
+          isGroupTesting={Boolean(delaying[group.name])}
+          onProxyDelay={onProxyDelay}
+          onSelect={onChangeProxy}
         />
       )
     },
@@ -732,62 +1096,9 @@ const Proxies: React.FC = () => {
       warmUpGroupDetail,
       onSearchGroup,
       onLocateGroupProxy,
-      onGroupDelay
-    ]
-  )
-
-  const renderItemContent = useCallback(
-    (index: number, groupIndex: number) => {
-      const innerIndex = index - (groupRowOffsets[groupIndex] ?? 0)
-      const group = proxyGroups[groupIndex]
-      const proxies = allProxies[groupIndex]
-      const rowStart = innerIndex * cols
-      const currentProxyName = group ? (groupDetails[group.name]?.now ?? group.now) : ''
-
-      if (!group || !proxies) {
-        return <div>Never See This</div>
-      }
-
-      if (!proxies[rowStart]) {
-        return <div className="h-px" aria-hidden="true" />
-      }
-
-      return (
-        <div
-          style={proxyGridStyle}
-          className={`grid ${proxyCols === 'auto' ? 'sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5' : ''} gap-2 pt-2 mx-2`}
-        >
-          {Array.from({ length: cols }).map((_, i) => {
-            const proxy = proxies[rowStart + i]
-            if (!proxy) return null
-            return (
-              <ProxyItem
-                key={proxy.name}
-                mutateProxies={mutate}
-                onProxyDelay={onProxyDelay}
-                onSelect={onChangeProxy}
-                proxy={proxy}
-                group={group}
-                proxyDisplayMode={proxyDisplayMode}
-                selected={proxy.name === currentProxyName}
-                isGroupTesting={Boolean(delaying[group.name])}
-              />
-            )
-          })}
-        </div>
-      )
-    },
-    [
-      groupRowOffsets,
-      allProxies,
-      groupDetails,
+      onGroupDelay,
       proxyCols,
       proxyGridStyle,
-      cols,
-      proxyGroups,
-      proxyDisplayMode,
-      delaying,
-      mutate,
       onProxyDelay,
       onChangeProxy
     ]
@@ -829,20 +1140,17 @@ const Proxies: React.FC = () => {
         <div className="h-[calc(100vh-50px)]" />
       ) : (
         <div className="h-[calc(100vh-50px)]">
-          <GroupedVirtuoso
+          <Virtuoso
             ref={virtuosoRef}
-            groupCounts={groupCounts}
-            defaultItemHeight={hasProxyRows ? PROXY_ITEM_ROW_HEIGHT : EMPTY_PROXY_ITEM_ROW_HEIGHT}
-            fixedGroupHeight={PROXY_GROUP_ROW_HEIGHT}
-            initialItemCount={initialItemCount}
+            data={rows}
+            defaultItemHeight={hasProxyRows ? PROXY_ITEM_ROW_HEIGHT : PROXY_GROUP_ROW_HEIGHT}
             increaseViewportBy={{ top: 150, bottom: 150 }}
             overscan={200}
             components={virtuosoComponents}
             context={virtuosoContext}
             itemsRendered={onVirtuosoItemsRendered}
             computeItemKey={computeProxyItemKey}
-            groupContent={renderGroupContent}
-            itemContent={renderItemContent}
+            itemContent={renderRowContent}
           />
         </div>
       )}

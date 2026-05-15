@@ -3,8 +3,7 @@ import React, { useMemo, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 
 interface Props {
-  mutateProxies: () => void
-  onProxyDelay: (proxy: string, url?: string) => Promise<IMihomoDelay>
+  onProxyDelay: (group: string, proxy: string, url?: string) => Promise<IMihomoDelay>
   proxyDisplayMode: 'simple' | 'full'
   proxy: IMihomoProxy | IMihomoGroup
   group: Pick<IMihomoGroup, 'name' | 'testUrl'>
@@ -20,10 +19,13 @@ function delayColor(delay: number): 'primary' | 'success' | 'warning' | 'danger'
   return 'warning'
 }
 
+function latestDelay(proxy: IMihomoProxy | IMihomoGroup): number {
+  return proxy.history.length > 0 ? proxy.history[proxy.history.length - 1].delay : -1
+}
+
 const ProxyItemBase: React.FC<Props> = (props) => {
   const { t } = useTranslation()
   const {
-    mutateProxies,
     proxyDisplayMode,
     group,
     proxy,
@@ -33,12 +35,7 @@ const ProxyItemBase: React.FC<Props> = (props) => {
     isGroupTesting = false
   } = props
 
-  const delay = useMemo(() => {
-    if (proxy.history.length > 0) {
-      return proxy.history[proxy.history.length - 1].delay
-    }
-    return -1
-  }, [proxy.history])
+  const delay = latestDelay(proxy)
 
   const [loading, setLoading] = useState(false)
 
@@ -52,11 +49,10 @@ const ProxyItemBase: React.FC<Props> = (props) => {
 
   const onDelay = useCallback((): void => {
     setLoading(true)
-    onProxyDelay(proxy.name, group.testUrl).finally(() => {
-      mutateProxies()
+    onProxyDelay(group.name, proxy.name, group.testUrl).finally(() => {
       setLoading(false)
     })
-  }, [proxy.name, group.testUrl, onProxyDelay, mutateProxies])
+  }, [group.name, group.testUrl, proxy.name, onProxyDelay])
 
   return (
     <Card
@@ -69,7 +65,7 @@ const ProxyItemBase: React.FC<Props> = (props) => {
       className={`${
         selected
           ? 'bg-primary/30 border-r-2 border-r-primary border-l-2 border-l-primary'
-          : 'bg-content2'
+          : 'bg-content2 border-r-2 border-r-transparent border-l-2 border-l-transparent'
       } proxy-node-pressable-card`}
       radius="sm"
     >
@@ -144,7 +140,15 @@ const ProxyItem = React.memo(ProxyItemBase, (prevProps, nextProps) => {
   // 必要时重新渲染
   return (
     prevProps.proxy.name === nextProps.proxy.name &&
-    prevProps.proxy.history === nextProps.proxy.history &&
+    prevProps.proxy.type === nextProps.proxy.type &&
+    prevProps.proxy.tfo === nextProps.proxy.tfo &&
+    prevProps.proxy.udp === nextProps.proxy.udp &&
+    prevProps.proxy.xudp === nextProps.proxy.xudp &&
+    Boolean((prevProps.proxy as IMihomoProxy).mptcp) ===
+      Boolean((nextProps.proxy as IMihomoProxy).mptcp) &&
+    Boolean((prevProps.proxy as IMihomoProxy).smux) ===
+      Boolean((nextProps.proxy as IMihomoProxy).smux) &&
+    latestDelay(prevProps.proxy) === latestDelay(nextProps.proxy) &&
     prevProps.group.name === nextProps.group.name &&
     prevProps.group.testUrl === nextProps.group.testUrl &&
     prevProps.selected === nextProps.selected &&
