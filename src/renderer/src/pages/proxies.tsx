@@ -178,6 +178,7 @@ const ProxyGroupHeader = memo(function ProxyGroupHeader(props: ProxyGroupHeaderP
         isPressable
         disableRipple
         fullWidth
+        className="proxy-group-pressable-card"
         onFocus={() => onWarmUp(group.name)}
         onPointerEnter={() => onWarmUp(group.name)}
         onPress={() => onToggle(group.name)}

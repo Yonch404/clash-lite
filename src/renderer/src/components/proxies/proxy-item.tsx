@@ -70,7 +70,7 @@ const ProxyItemBase: React.FC<Props> = (props) => {
         selected
           ? 'bg-primary/30 border-r-2 border-r-primary border-l-2 border-l-primary'
           : 'bg-content2'
-      }`}
+      } proxy-node-pressable-card`}
       radius="sm"
     >
       <CardBody className="p-1">

@@ -73,6 +73,7 @@
 .app-nodrag {
   -webkit-app-region: none;
 }
+
 .app-drag {
   -webkit-app-region: drag;
 }
@@ -194,6 +195,28 @@
   transition: none;
 }
 
+.proxy-group-pressable-card {
+  transform-origin: center;
+  transition-property: transform, background-color, box-shadow !important;
+  transition-duration: 70ms !important;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1) !important;
+}
+
+.proxy-group-pressable-card[data-pressed='true'] {
+  transform: scale(0.999) !important;
+  transition-duration: 40ms !important;
+}
+
+.proxy-node-pressable-card {
+  transition-property: transform, background-color, box-shadow !important;
+  transition-duration: 70ms !important;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1) !important;
+}
+
+.proxy-node-pressable-card[data-pressed='true'] {
+  transition-duration: 40ms !important;
+}
+
 /* Toast */
 .toast-enter {
   animation: toast-in 0.2s ease-out forwards;
@@ -208,6 +231,7 @@
     opacity: 0;
     transform: translateX(20px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -219,6 +243,7 @@
     opacity: 1;
     transform: translateX(0);
   }
+
   to {
     opacity: 0;
     transform: translateX(20px);
@@ -234,6 +259,7 @@
   from {
     width: 100%;
   }
+
   to {
     width: 0%;
   }
