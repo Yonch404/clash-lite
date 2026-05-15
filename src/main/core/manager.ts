@@ -31,7 +31,6 @@ import {
   stopMihomoLogs,
   stopMihomoMemory,
   startSubscribedMihomoStreams,
-  patchMihomoConfig,
   getAxios
 } from './mihomoApi'
 import { generateProfile } from './factory'
@@ -135,10 +134,10 @@ export const getMihomoIpcPath = (): string => {
 interface CoreConfig {
   corePath: string
   workDir: string
+  configPath: string
   controllerParam: string
   controllerAddress: string
   controllerSecret?: string
-  logLevel: LogLevel
   tunEnabled: boolean
   autoSetDNS: boolean
   cpuPriority: string
@@ -155,7 +154,7 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
   const { diffWorkDir = false, mihomoCpuPriority = 'PRIORITY_NORMAL' } = appConfig
   const core = 'mihomo'
 
-  const { 'log-level': logLevel = 'info' as LogLevel, tun } = mihomoConfig
+  const { tun } = mihomoConfig
   const tunEnabled = tun?.enable ?? true
   const useWindowsElevatedTask =
     process.platform === 'win32' && tunEnabled && !getSessionAdminStatus()
@@ -200,16 +199,18 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
   const controllerAddress = windowsController
     ? `${windowsController.host}:${windowsController.port}`
     : getMihomoIpcPath()
+  const workDir = diffWorkDir ? mihomoProfileWorkDir(current) : mihomoWorkDir()
+  const configPath = diffWorkDir ? mihomoWorkConfigPath(current) : mihomoWorkConfigPath('work')
 
   managerLogger.info(`Using controller: ${controllerAddress}`)
 
   return {
     corePath: mihomoCorePath(core),
-    workDir: diffWorkDir ? mihomoProfileWorkDir(current) : mihomoWorkDir(),
+    workDir,
+    configPath,
     controllerParam,
     controllerAddress,
     controllerSecret: windowsController?.secret,
-    logLevel,
     tunEnabled,
     autoSetDNS: false,
     cpuPriority: mihomoCpuPriority,
@@ -257,14 +258,253 @@ function spawnCoreProcess(config: CoreConfig): ChildProcess {
   return proc
 }
 
-async function startMihomoRuntimeServices(logLevel: LogLevel): Promise<void> {
+function escapeRegExp(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+}
+
+function getTunInet4Addresses(tun: Partial<IMihomoTunConfig>): string[] {
+  const value = (tun as { 'inet4-address'?: unknown })['inet4-address']
+
+  if (Array.isArray(value)) {
+    return value
+      .filter((address): address is string => typeof address === 'string')
+      .map((address) => address.split('/')[0])
+      .filter(Boolean)
+  }
+
+  if (typeof value === 'string') {
+    return [value.split('/')[0]].filter(Boolean)
+  }
+
+  return []
+}
+
+function getTunDevice(tun: Partial<IMihomoTunConfig>): string {
+  return tun.device || 'Mihomo'
+}
+
+async function hasWindowsTunNetworkState(tun: Partial<IMihomoTunConfig>): Promise<boolean> {
+  const address = getTunInet4Addresses(tun)[0]
+  const device = getTunDevice(tun)
+  const shouldHaveRoute = tun['auto-route'] === true
+  if (!address) return false
+
+  try {
+    const { stdout } = await execFilePromise(
+      'netsh.exe',
+      ['interface', 'ipv4', 'show', 'addresses', `name=${device}`],
+      { encoding: 'utf8', windowsHide: true }
+    )
+    if (!String(stdout).includes(address)) return false
+  } catch (error) {
+    managerLogger.warn('Failed to query Windows TUN address with netsh:', error)
+    return false
+  }
+
+  if (!shouldHaveRoute) return true
+
+  try {
+    const { stdout } = await execFilePromise('route.exe', ['print'], {
+      encoding: 'utf8',
+      windowsHide: true
+    })
+    return String(stdout)
+      .split(/\r?\n/u)
+      .some((line) => {
+        const ips = line.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/gu) || []
+        return ips.length >= 4 && ips[ips.length - 1] === address
+      })
+  } catch (error) {
+    managerLogger.warn('Failed to query Windows TUN route table:', error)
+    return false
+  }
+}
+
+async function execLinuxIp(args: string[]): Promise<string> {
+  const candidates = ['ip', '/usr/sbin/ip', '/sbin/ip', '/usr/bin/ip', '/bin/ip']
+  let lastError: unknown
+
+  for (const candidate of candidates) {
+    try {
+      const { stdout } = await execFilePromise(candidate, args, {
+        encoding: 'utf8',
+        windowsHide: true
+      })
+      return String(stdout)
+    } catch (error) {
+      lastError = error
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error
+      }
+    }
+  }
+
+  throw lastError
+}
+
+function hasLinuxTunAddress(output: string, addresses: string[]): boolean {
+  if (addresses.length === 0) {
+    return /\binet\s+(?:\d{1,3}\.){3}\d{1,3}\//u.test(output)
+  }
+
+  return addresses.some(
+    (address) => output.includes(` ${address}/`) || output.includes(` ${address} `)
+  )
+}
+
+function isLinuxTunRouteLine(line: string, device: string): boolean {
+  const trimmed = line.trim()
+  if (!trimmed) return false
+
+  if (/^(broadcast|local|blackhole|unreachable|prohibit|throw)\b/u.test(trimmed)) {
+    return false
+  }
+
+  if (trimmed.includes(' proto kernel ') && trimmed.includes(' scope link ')) {
+    return false
+  }
+
+  return new RegExp(`\\bdev\\s+${escapeRegExp(device)}(?:\\s|$)`, 'u').test(trimmed)
+}
+
+function getLinuxTunRouteTables(routeOutput: string, device: string): string[] {
+  return routeOutput
+    .split(/\r?\n/u)
+    .filter((line) => isLinuxTunRouteLine(line, device))
+    .map((line) => line.match(/\btable\s+(\S+)/u)?.[1] || 'main')
+}
+
+function hasLinuxTunRouteRule(ruleOutput: string, table: string): boolean {
+  return new RegExp(`\\blookup\\s+${escapeRegExp(table)}(?:\\s|$)`, 'u').test(ruleOutput)
+}
+
+async function hasLinuxTunNetworkState(tun: Partial<IMihomoTunConfig>): Promise<boolean> {
+  const addresses = getTunInet4Addresses(tun)
+  const device = getTunDevice(tun)
+  const shouldHaveRoute = tun['auto-route'] === true
+
+  try {
+    const addressOutput = await execLinuxIp(['-o', '-4', 'addr', 'show', 'dev', device])
+    if (!hasLinuxTunAddress(addressOutput, addresses)) return false
+  } catch (error) {
+    managerLogger.warn('Failed to query Linux TUN address with ip:', error)
+    return false
+  }
+
+  if (!shouldHaveRoute) return true
+
+  try {
+    const routeOutput = await execLinuxIp(['-4', 'route', 'show', 'table', 'all'])
+    const routeTables = getLinuxTunRouteTables(routeOutput, device)
+    if (routeTables.length === 0) return false
+
+    const customRouteTables = routeTables.filter(
+      (table) => !['default', 'local', 'main'].includes(table)
+    )
+    if (customRouteTables.length === 0) return true
+
+    const ruleOutput = await execLinuxIp(['-4', 'rule', 'show'])
+    return customRouteTables.some((table) => hasLinuxTunRouteRule(ruleOutput, table))
+  } catch (error) {
+    managerLogger.warn('Failed to query Linux route table with ip:', error)
+    return false
+  }
+}
+
+async function isWindowsTunReady(): Promise<boolean> {
+  try {
+    const instance = await getAxios()
+    const config = (await instance.get('/configs')) as Partial<IMihomoConfig>
+    const tun = config.tun
+    if (!tun?.enable) return false
+
+    return await hasWindowsTunNetworkState(tun)
+  } catch (error) {
+    managerLogger.warn('Failed to query Windows TUN runtime status:', error)
+    return false
+  }
+}
+
+async function isLinuxTunReady(): Promise<boolean> {
+  try {
+    const instance = await getAxios()
+    const config = (await instance.get('/configs')) as Partial<IMihomoConfig>
+    const tun = config.tun
+    if (!tun?.enable) return false
+
+    return await hasLinuxTunNetworkState(tun)
+  } catch (error) {
+    managerLogger.warn('Failed to query Linux TUN runtime status:', error)
+    return false
+  }
+}
+
+async function waitForWindowsTunReady(maxRetries = 10): Promise<boolean> {
+  for (let i = 0; i < maxRetries; i++) {
+    if (await isWindowsTunReady()) return true
+    await new Promise((resolve) => setTimeout(resolve, 300))
+  }
+  return false
+}
+
+async function waitForLinuxTunReady(maxRetries = 10): Promise<boolean> {
+  for (let i = 0; i < maxRetries; i++) {
+    if (await isLinuxTunReady()) return true
+    await new Promise((resolve) => setTimeout(resolve, 300))
+  }
+  return false
+}
+
+async function forceReloadRuntimeConfig(configPath: string): Promise<void> {
+  const instance = await getAxios()
+  await instance.put('/configs?force=true', { path: configPath })
+}
+
+async function ensureWindowsTunReady(config: CoreConfig): Promise<void> {
+  if (process.platform !== 'win32' || !config.tunEnabled) return
+
+  if (await waitForWindowsTunReady()) return
+
+  managerLogger.warn(
+    'Windows TUN did not become ready after core API startup, forcing runtime config reload'
+  )
+
+  try {
+    await forceReloadRuntimeConfig(config.configPath)
+  } catch (error) {
+    managerLogger.warn('Failed to force reload runtime config for Windows TUN:', error)
+  }
+
+  if (await waitForWindowsTunReady(15)) return
+
+  throw new Error(i18next.t('tun.error.tunPermissionDenied'))
+}
+
+async function ensureLinuxTunReady(config: CoreConfig): Promise<void> {
+  if (process.platform !== 'linux' || !config.tunEnabled) return
+
+  if (await waitForLinuxTunReady()) return
+
+  managerLogger.warn(
+    'Linux TUN did not become ready after core API startup, forcing runtime config reload'
+  )
+
+  try {
+    await forceReloadRuntimeConfig(config.configPath)
+  } catch (error) {
+    managerLogger.warn('Failed to force reload runtime config for Linux TUN:', error)
+  }
+
+  if (await waitForLinuxTunReady(15)) return
+
+  throw new Error(i18next.t('tun.error.linuxTunPermissionDenied'))
+}
+
+async function startMihomoRuntimeServices(config: CoreConfig): Promise<void> {
   await waitForCoreReady({ maxRetries: 100, retryIntervalMs: 100, throwOnFailure: true })
   await getAxios(true)
-  try {
-    await patchMihomoConfig({ 'log-level': logLevel })
-  } catch (error) {
-    managerLogger.warn('Failed to patch log level after core startup:', error)
-  }
+  await ensureWindowsTunReady(config)
+  await ensureLinuxTunReady(config)
   await startMihomoTraffic()
   await startMihomoMemory()
   await startSubscribedMihomoStreams()
@@ -283,7 +523,7 @@ function createTimedProviderReadyPromise(): Promise<void> {
 // 设置核心进程事件监听
 function setupCoreListeners(
   proc: ChildProcess,
-  logLevel: LogLevel,
+  config: CoreConfig,
   resolve: (value: Promise<void>[]) => void,
   reject: (reason: unknown) => void
 ): void {
@@ -340,7 +580,7 @@ function setupCoreListeners(
     if (startupTask) return
 
     startupTask = (async () => {
-      await startMihomoRuntimeServices(logLevel)
+      await startMihomoRuntimeServices(config)
       resolveStartup([createProviderReadyPromise()])
     })()
 
@@ -455,7 +695,7 @@ export async function startCore(detached = false, skipStop = false): Promise<Pro
     await startWindowsElevatedCore(request)
     coreLaunchMode = 'windows-elevated-task'
     child = null
-    await startMihomoRuntimeServices(config.logLevel)
+    await startMihomoRuntimeServices(config)
     return [createTimedProviderReadyPromise()]
   }
 
@@ -476,7 +716,7 @@ export async function startCore(detached = false, skipStop = false): Promise<Pro
   }
 
   return new Promise<Promise<void>[]>((resolve, reject) => {
-    setupCoreListeners(proc, config.logLevel, resolve, reject)
+    setupCoreListeners(proc, config, resolve, reject)
   })
 }
 

@@ -1,11 +1,11 @@
-import { exec } from 'child_process'
+import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { rm } from 'fs/promises'
 import { existsSync } from 'fs'
 import { managerLogger } from '../utils/logger'
 import { getAxios } from './mihomoApi'
 
-const execPromise = promisify(exec)
+const execFilePromise = promisify(execFile)
 
 const CORE_READY_MAX_RETRIES = 30
 const CORE_READY_RETRY_INTERVAL_MS = 100
@@ -27,27 +27,18 @@ export async function cleanupSocketFile(): Promise<void> {
 export async function cleanupWindowsNamedPipes(): Promise<void> {
   try {
     try {
-      const { stdout } = await execPromise(
-        `powershell -NoProfile -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-Process | Where-Object {$_.ProcessName -like '*mihomo*'} | Select-Object Id,ProcessName | ConvertTo-Json"`,
-        { encoding: 'utf8' }
+      const { stdout } = await execFilePromise(
+        'tasklist.exe',
+        ['/FI', 'IMAGENAME eq mihomo.exe', '/FO', 'CSV', '/NH'],
+        { encoding: 'utf8', windowsHide: true }
       )
 
       if (stdout.trim()) {
         managerLogger.info(`Found potential pipe-blocking processes: ${stdout}`)
-
-        try {
-          const processes = JSON.parse(stdout)
-          const processArray = Array.isArray(processes) ? processes : [processes]
-
-          for (const proc of processArray) {
-            const pid = proc.Id
-            if (pid && pid !== process.pid) {
-              await terminateProcess(pid)
-            }
+        for (const pid of parseTasklistPids(stdout)) {
+          if (pid !== process.pid) {
+            await terminateProcess(pid)
           }
-        } catch (parseError) {
-          managerLogger.warn('Failed to parse process list JSON:', parseError)
-          await fallbackTextParsing(stdout)
         }
       }
     } catch (error) {
@@ -60,6 +51,18 @@ export async function cleanupWindowsNamedPipes(): Promise<void> {
   }
 }
 
+function parseTasklistPids(stdout: string): number[] {
+  return stdout
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !line.includes('INFO:'))
+    .map((line) => {
+      const [, , pid] = line.match(/^"([^"]+)","(\d+)"/u) || []
+      return Number(pid)
+    })
+    .filter((pid) => Number.isFinite(pid) && pid > 0)
+}
+
 async function terminateProcess(pid: number): Promise<void> {
   try {
     process.kill(pid, 0)
@@ -68,19 +71,6 @@ async function terminateProcess(pid: number): Promise<void> {
   } catch (error: unknown) {
     if ((error as { code?: string })?.code !== 'ESRCH') {
       managerLogger.warn(`Failed to terminate process ${pid}:`, error)
-    }
-  }
-}
-
-async function fallbackTextParsing(stdout: string): Promise<void> {
-  const lines = stdout.split('\n').filter((line) => line.includes('mihomo'))
-  for (const line of lines) {
-    const match = line.match(/(\d+)/)
-    if (match) {
-      const pid = parseInt(match[1])
-      if (pid !== process.pid) {
-        await terminateProcess(pid)
-      }
     }
   }
 }

@@ -56,6 +56,20 @@ function escapePowerShellSingleQuoted(value: string): string {
   return value.replace(/'/g, "''")
 }
 
+function getPowerShellCandidates(): string[] {
+  const candidates: string[] = []
+  const systemRoot = process.env.SystemRoot || process.env.WINDIR
+
+  if (systemRoot) {
+    candidates.push(
+      path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+    )
+  }
+
+  candidates.push('powershell.exe', 'pwsh.exe')
+  return candidates
+}
+
 function quoteWindowsArgument(value: string): string {
   if (!/[\s"]/u.test(value)) return value
 
@@ -204,9 +218,32 @@ async function createTaskElevated(taskFilePath: string): Promise<void> {
     `Start-Process -FilePath "$env:SystemRoot\\System32\\schtasks.exe" ` +
     `-ArgumentList $arguments -Verb RunAs -WindowStyle Hidden -Wait`
 
+  let lastError: unknown = null
+
+  for (const powershellPath of getPowerShellCandidates()) {
+    if (path.isAbsolute(powershellPath) && !existsSync(powershellPath)) continue
+
+    try {
+      await execFilePromise(
+        powershellPath,
+        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command],
+        {
+          windowsHide: true
+        }
+      )
+      return
+    } catch (error) {
+      lastError = error
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error
+      }
+    }
+  }
+
+  managerLogger.warn('PowerShell is unavailable, trying direct scheduled task creation', lastError)
   await execFilePromise(
-    'powershell.exe',
-    ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command],
+    'schtasks.exe',
+    ['/create', '/tn', WINDOWS_CORE_TASK_NAME, '/xml', taskFilePath, '/f'],
     {
       windowsHide: true
     }

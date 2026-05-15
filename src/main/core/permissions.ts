@@ -19,6 +19,20 @@ type StopCoreBeforeAdminRestart = (force?: boolean) => Promise<void>
 
 let stopCoreBeforeAdminRestart: StopCoreBeforeAdminRestart | null = null
 
+function getPowerShellCandidates(): string[] {
+  const candidates: string[] = []
+  const systemRoot = process.env.SystemRoot || process.env.WINDIR
+
+  if (systemRoot) {
+    candidates.push(
+      path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+    )
+  }
+
+  candidates.push('powershell.exe', 'pwsh.exe')
+  return candidates
+}
+
 export function setStopCoreBeforeAdminRestart(stopCore: StopCoreBeforeAdminRestart): void {
   stopCoreBeforeAdminRestart = stopCore
 }
@@ -203,19 +217,15 @@ async function checkHighPrivilegeMihomoProcess(): Promise<boolean> {
             for (const line of lines) {
               const parts = line.split(',')
               if (parts.length >= 2) {
-                const pid = parts[1].replace(/"/g, '').trim()
+                const pid = Number(parts[1].replace(/"/g, '').trim())
+                if (!Number.isFinite(pid) || pid <= 0 || pid === process.pid) continue
                 try {
-                  const { stdout: processInfo } = await execPromise(
-                    `powershell -NoProfile -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-Process -Id ${pid} | Select-Object Name,Id,Path,CommandLine | ConvertTo-Json"`,
-                    { encoding: 'utf8' }
-                  )
-                  const processJson = JSON.parse(processInfo)
-                  managerLogger.info(`Process ${pid} info: ${processInfo.substring(0, 200)}`)
-
-                  if (processJson.Name.includes('mihomo') && processJson.Path === null) {
+                  process.kill(pid, 0)
+                } catch (error: unknown) {
+                  if ((error as NodeJS.ErrnoException).code === 'EPERM') {
+                    managerLogger.info(`Process ${pid} exists but is not accessible`)
                     return true
                   }
-                } catch {
                   managerLogger.info(`Cannot get info for process ${pid}, might be high privilege`)
                 }
               }
@@ -291,19 +301,34 @@ export async function restartAsAdmin(): Promise<void> {
   // 使用 Start-Sleep 延迟启动，确保旧进程完全退出后再启动新进程
   const command =
     restartArgs.length > 0
-      ? `powershell -NoProfile -Command "Start-Sleep -Milliseconds 1000; Start-Process -FilePath '${escapedExePath}' -ArgumentList '${argsString}' -Verb RunAs"`
-      : `powershell -NoProfile -Command "Start-Sleep -Milliseconds 1000; Start-Process -FilePath '${escapedExePath}' -Verb RunAs"`
+      ? `Start-Sleep -Milliseconds 1000; Start-Process -FilePath '${escapedExePath}' -ArgumentList '${argsString}' -Verb RunAs`
+      : `Start-Sleep -Milliseconds 1000; Start-Process -FilePath '${escapedExePath}' -Verb RunAs`
 
   managerLogger.info('Restarting as administrator with command', command)
 
-  // 先启动 PowerShell（它会等待 1 秒），然后立即退出当前进程
-  exec(command, { windowsHide: true }, (error) => {
-    if (error) {
-      managerLogger.error('Failed to start PowerShell for admin restart', error)
+  let lastError: unknown = null
+  for (const powershellPath of getPowerShellCandidates()) {
+    if (path.isAbsolute(powershellPath) && !existsSync(powershellPath)) continue
+
+    try {
+      await execFilePromise(
+        powershellPath,
+        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command],
+        { windowsHide: true }
+      )
+      managerLogger.info('Elevated restart command started, quitting app immediately')
+      app.exit(0)
+      return
+    } catch (error) {
+      lastError = error
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        break
+      }
     }
-  })
-  managerLogger.info('PowerShell command started, quitting app immediately')
-  app.exit(0)
+  }
+
+  managerLogger.error('Failed to start elevated restart command', lastError)
+  throw new Error(i18next.t('tun.permissions.failed'))
 }
 
 export async function showErrorDialog(title: string, message: string): Promise<void> {
