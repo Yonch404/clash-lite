@@ -10,8 +10,17 @@ import {
 import { CgDetailsLess, CgDetailsMore } from 'react-icons/cg'
 import { FaLocationCrosshairs } from 'react-icons/fa6'
 import { MdDoubleArrow, MdOutlineSpeed } from 'react-icons/md'
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import {
+  forwardRef,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+  type CSSProperties
+} from 'react'
 import { GroupedVirtuoso, GroupedVirtuosoHandle } from 'react-virtuoso'
+import type { Components, ContextProp, ScrollerProps } from 'react-virtuoso'
 import ProxyItem from '@renderer/components/proxies/proxy-item'
 import { IoIosArrowBack } from 'react-icons/io'
 import { useGroups } from '@renderer/hooks/use-groups'
@@ -22,6 +31,32 @@ import { useTranslation } from 'react-i18next'
 
 const GROUP_EXPAND_STATE_KEY = 'proxy_group_expand_state'
 const EMPTY_GROUPS: IMihomoMixedGroup[] = []
+const PROXY_GROUP_ROW_HEIGHT = 64
+const PROXY_ITEM_ROW_HEIGHT = 80
+const EMPTY_PROXY_ITEM_ROW_HEIGHT = 1
+
+interface ProxiesVirtuosoContext {
+  hideScrollbar: boolean
+}
+
+const ProxiesScroller = forwardRef<
+  HTMLDivElement,
+  ScrollerProps & ContextProp<ProxiesVirtuosoContext>
+>(({ style, context, ...props }, ref) => {
+  const scrollerStyle = {
+    ...style,
+    overflowY: context.hideScrollbar ? 'hidden' : style?.overflowY
+  } as CSSProperties
+
+  return <div {...props} ref={ref} style={scrollerStyle} />
+})
+
+ProxiesScroller.displayName = 'ProxiesScroller'
+
+const virtuosoComponents: Components<unknown, ProxiesVirtuosoContext> = {
+  Footer: () => <div className="h-2" />,
+  Scroller: ProxiesScroller
+}
 
 function readGroupExpandState(groups: IMihomoMixedGroup[]): boolean[] {
   if (groups.length === 0) return []
@@ -150,6 +185,62 @@ const Proxies: React.FC = () => {
     return { groupCounts, allProxies }
   }, [proxyGroups, isOpen, cols, searchValue, sortProxies])
 
+  const initialItemCount = useMemo(() => {
+    if (groupCount === 0) return 0
+
+    // In GroupedVirtuoso, initialItemCount counts item rows, not group headers.
+    // Cap it by the actual row count so the first pass does not create
+    // transient empty rows that briefly show a scrollbar and then disappear.
+    const totalProxyRows = groupCounts.reduce((total, count) => total + count, 0)
+    return totalProxyRows > 0 ? Math.min(groupCount, totalProxyRows) : 1
+  }, [groupCount, groupCounts])
+  const hasProxyRows = useMemo(() => groupCounts.some((count) => count > 0), [groupCounts])
+  const [virtuosoMeasured, setVirtuosoMeasured] = useState(false)
+  const hideVirtuosoScrollbar = !hasProxyRows && !virtuosoMeasured
+  const virtuosoContext = useMemo(
+    () => ({ hideScrollbar: hideVirtuosoScrollbar }),
+    [hideVirtuosoScrollbar]
+  )
+
+  useEffect(() => {
+    if (!hasProxyRows) {
+      setVirtuosoMeasured(false)
+    }
+  }, [groupNamesKey, hasProxyRows])
+
+  const onVirtuosoItemsRendered = useCallback(() => {
+    if (hasProxyRows || virtuosoMeasured) return
+
+    requestAnimationFrame(() => {
+      setVirtuosoMeasured(true)
+    })
+  }, [hasProxyRows, virtuosoMeasured])
+
+  const computeProxyItemKey = useCallback(
+    (flatIndex: number): string => {
+      let offset = 0
+
+      for (let groupIndex = 0; groupIndex < proxyGroups.length; groupIndex++) {
+        const group = proxyGroups[groupIndex]
+        const rowCount = groupCounts[groupIndex] ?? 0
+
+        if (flatIndex === offset) {
+          return `group:${group.name}`
+        }
+
+        const rowIndex = flatIndex - offset - 1
+        if (rowIndex >= 0 && rowIndex < rowCount) {
+          return `proxy-row:${group.name}:${rowIndex}`
+        }
+
+        offset += rowCount + 1
+      }
+
+      return `unknown:${flatIndex}`
+    },
+    [groupCounts, proxyGroups]
+  )
+
   const onChangeProxy = useCallback(
     async (group: string, proxy: string): Promise<void> => {
       await mihomoChangeProxy(group, proxy)
@@ -251,9 +342,7 @@ const Proxies: React.FC = () => {
           .catch(() => {})
       }
       return proxyGroups[index] ? (
-        <div
-          className={`w-full pt-2 ${index === groupCounts.length - 1 && !isOpen[index] ? 'pb-2' : ''} px-2`}
-        >
+        <div className="w-full pt-2 px-2">
           <Card
             as="div"
             isPressable
@@ -398,37 +487,48 @@ const Proxies: React.FC = () => {
       groupCounts.slice(0, groupIndex).forEach((count) => {
         innerIndex -= count
       })
-      return allProxies[groupIndex] ? (
+      const group = proxyGroups[groupIndex]
+      const proxies = allProxies[groupIndex]
+      const rowStart = innerIndex * cols
+      const hasVisibleProxy = Array.from({ length: cols }).some((_, i) =>
+        Boolean(proxies?.[rowStart + i])
+      )
+
+      if (!group || !proxies) {
+        return <div>Never See This</div>
+      }
+
+      if (!hasVisibleProxy) {
+        return <div className="h-px" aria-hidden="true" />
+      }
+
+      return (
         <div
           style={
             proxyCols !== 'auto'
               ? { gridTemplateColumns: `repeat(${proxyCols}, minmax(0, 1fr))` }
               : {}
           }
-          className={`grid ${proxyCols === 'auto' ? 'sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5' : ''} ${groupIndex === groupCounts.length - 1 && innerIndex === groupCounts[groupIndex] - 1 ? 'pb-2' : ''} gap-2 pt-2 mx-2`}
+          className={`grid ${proxyCols === 'auto' ? 'sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5' : ''} gap-2 pt-2 mx-2`}
         >
           {Array.from({ length: cols }).map((_, i) => {
-            if (!allProxies[groupIndex][innerIndex * cols + i]) return null
+            const proxy = proxies[rowStart + i]
+            if (!proxy) return null
             return (
               <ProxyItem
-                key={allProxies[groupIndex][innerIndex * cols + i].name}
+                key={proxy.name}
                 mutateProxies={mutate}
                 onProxyDelay={onProxyDelay}
                 onSelect={onChangeProxy}
-                proxy={allProxies[groupIndex][innerIndex * cols + i]}
-                group={proxyGroups[groupIndex]}
+                proxy={proxy}
+                group={group}
                 proxyDisplayMode={proxyDisplayMode}
-                selected={
-                  allProxies[groupIndex][innerIndex * cols + i]?.name ===
-                  proxyGroups[groupIndex].now
-                }
+                selected={proxy.name === group.now}
                 isGroupTesting={delaying[groupIndex]}
               />
             )
           })}
         </div>
-      ) : (
-        <div>Never See This</div>
       )
     },
     [
@@ -487,11 +587,15 @@ const Proxies: React.FC = () => {
           <GroupedVirtuoso
             ref={virtuosoRef}
             groupCounts={groupCounts}
-            defaultItemHeight={80}
-            initialItemCount={groupCount}
+            defaultItemHeight={hasProxyRows ? PROXY_ITEM_ROW_HEIGHT : EMPTY_PROXY_ITEM_ROW_HEIGHT}
+            fixedGroupHeight={PROXY_GROUP_ROW_HEIGHT}
+            initialItemCount={initialItemCount}
             increaseViewportBy={{ top: 150, bottom: 150 }}
             overscan={200}
-            computeItemKey={(index, groupIndex) => `${groupIndex}-${index}`}
+            components={virtuosoComponents}
+            context={virtuosoContext}
+            itemsRendered={onVirtuosoItemsRendered}
+            computeItemKey={computeProxyItemKey}
             groupContent={renderGroupContent}
             itemContent={renderItemContent}
           />
