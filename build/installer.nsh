@@ -9,6 +9,7 @@ Var DeleteUserData
 Var ClashLiteInstallDir
 Var ClashLiteInstallParentDir
 Var ClashLiteInstallParentName
+Var ClashLiteCleanupScript
 
 !macro customUnWelcomePage
   PageEx un.custom
@@ -43,14 +44,48 @@ Function un.ClashLiteScheduleInstallDirCleanup
   ${GetParent} "$ClashLiteInstallDir" $ClashLiteInstallParentDir
   ${GetFileName} "$ClashLiteInstallParentDir" $ClashLiteInstallParentName
   SetOutPath "$TEMP"
+  StrCpy $ClashLiteCleanupScript "$TEMP\clash-lite-uninstall-cleanup.cmd"
 
+  ClearErrors
+  FileOpen $0 "$ClashLiteCleanupScript" w
+  ${If} ${Errors}
+    Return
+  ${EndIf}
+
+  FileWrite $0 '@echo off$\r$\n'
+  FileWrite $0 'setlocal$\r$\n'
+  FileWrite $0 'cd /d "%TEMP%"$\r$\n'
+  FileWrite $0 'timeout /T 2 /NOBREAK >NUL$\r$\n'
+  FileWrite $0 'for /L %%i in (1,1,300) do ($\r$\n'
+  FileWrite $0 '  rmdir /S /Q "$ClashLiteInstallDir" 2>NUL$\r$\n'
   ${If} $ClashLiteInstallParentName == "${APP_FILENAME}"
   ${OrIf} $ClashLiteInstallParentName == "${PRODUCT_FILENAME}"
   ${OrIf} $ClashLiteInstallParentName == "Clash Lite"
   ${OrIf} $ClashLiteInstallParentName == "clash-lite"
-    ExecShell "open" "$SYSDIR\cmd.exe" '/D /Q /C timeout /T 2 /NOBREAK >NUL & for /L %i in (1,1,60) do @if exist "$ClashLiteInstallDir" (rmdir /S /Q "$ClashLiteInstallDir" 2>NUL & rmdir "$ClashLiteInstallParentDir" 2>NUL & if not exist "$ClashLiteInstallDir" exit /B 0 & timeout /T 1 /NOBREAK >NUL) else exit /B 0' SW_HIDE
-  ${Else}
-    ExecShell "open" "$SYSDIR\cmd.exe" '/D /Q /C timeout /T 2 /NOBREAK >NUL & for /L %i in (1,1,60) do @if exist "$ClashLiteInstallDir" (rmdir /S /Q "$ClashLiteInstallDir" 2>NUL & if not exist "$ClashLiteInstallDir" exit /B 0 & timeout /T 1 /NOBREAK >NUL) else exit /B 0' SW_HIDE
+    FileWrite $0 '  rmdir "$ClashLiteInstallParentDir" 2>NUL$\r$\n'
+  ${EndIf}
+  FileWrite $0 '  if not exist "$ClashLiteInstallDir" goto cleanup_parent$\r$\n'
+  FileWrite $0 '  timeout /T 1 /NOBREAK >NUL$\r$\n'
+  FileWrite $0 ')$\r$\n'
+  FileWrite $0 ':cleanup_parent$\r$\n'
+  ${If} $ClashLiteInstallParentName == "${APP_FILENAME}"
+  ${OrIf} $ClashLiteInstallParentName == "${PRODUCT_FILENAME}"
+  ${OrIf} $ClashLiteInstallParentName == "Clash Lite"
+  ${OrIf} $ClashLiteInstallParentName == "clash-lite"
+    FileWrite $0 'rmdir "$ClashLiteInstallParentDir" 2>NUL$\r$\n'
+  ${EndIf}
+  FileWrite $0 'del /F /Q "%~f0" >NUL 2>NUL$\r$\n'
+  FileClose $0
+
+  ExecShell "open" "$SYSDIR\cmd.exe" '/D /Q /C call "$ClashLiteCleanupScript"' SW_HIDE
+FunctionEnd
+
+Function un.onGUIEnd
+  ${IfNot} ${isUpdated}
+    SetOutPath "$TEMP"
+    RMDir /r "$INSTDIR"
+    RMDir "$INSTDIR"
+    Call un.ClashLiteScheduleInstallDirCleanup
   ${EndIf}
 FunctionEnd
 
@@ -74,12 +109,13 @@ FunctionEnd
   ${EndIf}
 
   SetOutPath $TEMP
-  RMDir /r $INSTDIR
+  RMDir /r "$INSTDIR"
   RMDir "$INSTDIR"
-  RMDir /REBOOTOK "$INSTDIR"
 
-  ${IfNot} ${isUpdated}
-    Call un.ClashLiteScheduleInstallDirCleanup
+  ${If} ${Silent}
+    ${IfNot} ${isUpdated}
+      Call un.ClashLiteScheduleInstallDirCleanup
+    ${EndIf}
   ${EndIf}
 !macroend
 
