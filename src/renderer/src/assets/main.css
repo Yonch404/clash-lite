@@ -4,10 +4,21 @@
 @source '../**/*.{js,ts,jsx,tsx}';
 @source '../../../../node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}';
 
+:root {
+  --app-text-font-family:
+    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI Variable', 'Segoe UI',
+    Roboto, 'Inter', 'Adwaita Sans', 'Ubuntu Sans', Ubuntu, Cantarell, Oxygen, 'Open Sans',
+    'Helvetica Neue', Arial, 'Noto Sans', 'Noto Sans CJK SC', 'Noto Sans CJK TC',
+    'Noto Sans CJK JP', 'Noto Sans CJK KR', 'Source Han Sans SC', 'Source Han Sans TC',
+    'Source Han Sans JP', 'Source Han Sans KR', 'Noto Sans Arabic', 'Noto Sans Hebrew',
+    'Noto Sans Thai', 'Noto Sans Devanagari', 'Noto Sans Bengali', 'Noto Sans Tamil',
+    'Noto Sans Telugu', 'Noto Sans Armenian', 'Noto Sans Georgian', 'Noto Sans Ethiopic',
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Liberation Sans',
+    'DejaVu Sans';
+}
+
 @theme {
-  --default-font-family:
-    system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell,
-    'Open Sans', 'Helvetica Neue', sans-serif;
+  --default-font-family: var(--app-text-font-family), sans-serif;
 }
 
 @font-face {
@@ -101,19 +112,8 @@
 
 .flag-emoji {
   font-family:
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    Roboto,
-    Oxygen,
-    Ubuntu,
-    Cantarell,
-    'Open Sans',
-    'Helvetica Neue',
-    sans-serif,
-    'Apple Color Emoji',
-    'Noto Color Emoji';
+    var(--app-text-font-family), 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji',
+    'Segoe UI Symbol', sans-serif;
 }
 
 .no-scrollbar::-webkit-scrollbar {
