@@ -1,10 +1,14 @@
 !include LogicLib.nsh
 !include nsDialogs.nsh
+!include FileFunc.nsh
 
 !ifdef BUILD_UNINSTALLER
 
 Var DeleteUserDataCheckbox
 Var DeleteUserData
+Var ClashLiteInstallDir
+Var ClashLiteInstallParentDir
+Var ClashLiteInstallParentName
 
 !macro customUnWelcomePage
   PageEx un.custom
@@ -34,7 +38,24 @@ Function un.ClashLiteUninstallOptionsPageLeave
   ${NSD_GetState} $DeleteUserDataCheckbox $DeleteUserData
 FunctionEnd
 
+Function un.ClashLiteScheduleInstallDirCleanup
+  StrCpy $ClashLiteInstallDir "$INSTDIR"
+  ${GetParent} "$ClashLiteInstallDir" $ClashLiteInstallParentDir
+  ${GetFileName} "$ClashLiteInstallParentDir" $ClashLiteInstallParentName
+
+  ${If} $ClashLiteInstallParentName == "${APP_FILENAME}"
+  ${OrIf} $ClashLiteInstallParentName == "${PRODUCT_FILENAME}"
+    ExecShell "open" "$SYSDIR\cmd.exe" '/C "timeout /T 2 /NOBREAK >NUL & for /L %i in (1,1,20) do @if exist "$ClashLiteInstallDir" (rmdir /S /Q "$ClashLiteInstallDir" 2>NUL & timeout /T 1 /NOBREAK >NUL) & rmdir "$ClashLiteInstallParentDir" 2>NUL"' SW_HIDE
+  ${Else}
+    ExecShell "open" "$SYSDIR\cmd.exe" '/C "timeout /T 2 /NOBREAK >NUL & for /L %i in (1,1,20) do @if exist "$ClashLiteInstallDir" (rmdir /S /Q "$ClashLiteInstallDir" 2>NUL & timeout /T 1 /NOBREAK >NUL)"' SW_HIDE
+  ${EndIf}
+FunctionEnd
+
 !macro customUnInstall
+  ${IfNot} ${isUpdated}
+    Call un.ClashLiteScheduleInstallDirCleanup
+  ${EndIf}
+
   DetailPrint "Stopping Clash Lite elevated core task..."
   nsExec::ExecToLog 'schtasks.exe /end /tn "ClashLiteCore"'
   Pop $0
@@ -48,10 +69,19 @@ FunctionEnd
 
   ${If} $DeleteUserData == ${BST_CHECKED}
     DetailPrint "Removing Clash Lite user data..."
+    ${If} $installMode == "all"
+      SetShellVarContext current
+    ${EndIf}
+
     RMDir /r "$APPDATA\clash-lite"
     RMDir /r "$LOCALAPPDATA\clash-lite"
     RMDir /r "$APPDATA\Clash Lite"
     RMDir /r "$LOCALAPPDATA\Clash Lite"
+    RMDir /r "$LOCALAPPDATA\clash-lite-updater"
+
+    ${If} $installMode == "all"
+      SetShellVarContext all
+    ${EndIf}
   ${EndIf}
 !macroend
 
