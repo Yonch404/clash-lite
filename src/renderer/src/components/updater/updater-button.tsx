@@ -55,14 +55,14 @@ const UpdaterButton: React.FC<Props> = (props) => {
         </Button>
       ) : (
         <Button
-          className="app-nodrag h-7 min-w-0 px-2.5 text-sm font-semibold leading-none"
+          className="app-nodrag h-7 min-w-0 px-2.5 text-sm font-semibold leading-5"
           color="danger"
           size="sm"
           onPress={() => {
             setOpenModal(true)
           }}
         >
-          <span className="relative -top-px leading-none">{t('common.updater.update')}</span>
+          {t('common.updater.update')}
         </Button>
       )}
     </>
