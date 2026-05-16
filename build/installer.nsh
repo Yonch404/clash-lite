@@ -48,17 +48,42 @@ Function un.ClashLiteScheduleInstallDirCleanup
   ${OrIf} $ClashLiteInstallParentName == "${PRODUCT_FILENAME}"
   ${OrIf} $ClashLiteInstallParentName == "Clash Lite"
   ${OrIf} $ClashLiteInstallParentName == "clash-lite"
-    ExecShell "open" "$SYSDIR\cmd.exe" '/D /C "timeout /T 2 /NOBREAK >NUL & for /L %i in (1,1,20) do @if exist "$ClashLiteInstallDir" (rmdir /S /Q "$ClashLiteInstallDir" 2>NUL & timeout /T 1 /NOBREAK >NUL) & rmdir "$ClashLiteInstallParentDir" 2>NUL"' SW_HIDE
+    ExecShell "open" "$SYSDIR\cmd.exe" '/D /Q /C timeout /T 2 /NOBREAK >NUL & for /L %i in (1,1,60) do @if exist "$ClashLiteInstallDir" (rmdir /S /Q "$ClashLiteInstallDir" 2>NUL & rmdir "$ClashLiteInstallParentDir" 2>NUL & if not exist "$ClashLiteInstallDir" exit /B 0 & timeout /T 1 /NOBREAK >NUL) else exit /B 0' SW_HIDE
   ${Else}
-    ExecShell "open" "$SYSDIR\cmd.exe" '/D /C "timeout /T 2 /NOBREAK >NUL & for /L %i in (1,1,20) do @if exist "$ClashLiteInstallDir" (rmdir /S /Q "$ClashLiteInstallDir" 2>NUL & timeout /T 1 /NOBREAK >NUL)"' SW_HIDE
+    ExecShell "open" "$SYSDIR\cmd.exe" '/D /Q /C timeout /T 2 /NOBREAK >NUL & for /L %i in (1,1,60) do @if exist "$ClashLiteInstallDir" (rmdir /S /Q "$ClashLiteInstallDir" 2>NUL & if not exist "$ClashLiteInstallDir" exit /B 0 & timeout /T 1 /NOBREAK >NUL) else exit /B 0' SW_HIDE
   ${EndIf}
 FunctionEnd
 
-!macro customUnInstall
+!macro customRemoveFiles
+  ${If} ${isUpdated}
+    CreateDirectory "$PLUGINSDIR\old-install"
+
+    Push ""
+    Call un.atomicRMDir
+    Pop $R0
+
+    ${If} $R0 != 0
+      DetailPrint "File is busy, aborting: $R0"
+
+      Push ""
+      Call un.restoreFiles
+      Pop $R0
+
+      Abort `Can't rename "$INSTDIR" to "$PLUGINSDIR\old-install".`
+    ${EndIf}
+  ${EndIf}
+
+  SetOutPath $TEMP
+  RMDir /r $INSTDIR
+  RMDir "$INSTDIR"
+  RMDir /REBOOTOK "$INSTDIR"
+
   ${IfNot} ${isUpdated}
     Call un.ClashLiteScheduleInstallDirCleanup
   ${EndIf}
+!macroend
 
+!macro customUnInstall
   DetailPrint "Stopping Clash Lite elevated core task..."
   nsExec::ExecToLog 'schtasks.exe /end /tn "ClashLiteCore"'
   Pop $0
