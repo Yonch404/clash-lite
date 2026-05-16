@@ -398,6 +398,8 @@
   "tun.permissions.failed": "權限授權失敗",
   "tun.permissions.serviceTitle": "安裝 TUN 權限任務",
   "tun.permissions.serviceMessage": "Clash Lite 需要建立一個高權限背景任務來啟動 TUN 內核。此操作只需授權一次，之後正常啟動軟體不會再彈出系統管理員權限請求。",
+  "tun.permissions.linuxServiceMessage": "Clash Lite 需要安裝或修復 Linux TUN 權限服務。此操作只需授權一次，之後重啟內核不會再反覆請求修改 DNS、網卡或路由的權限。",
+  "tun.permissions.serviceUnavailable": "Linux TUN 權限服務不可用，請重新安裝或修復 Clash Lite 後重試。",
   "tun.permissions.reauthorizeTitle": "需要重新授權內核",
   "tun.permissions.reauthorizeMessage": "Clash Lite 需要為 Mihomo 內核授予 TUN 所需的網路權限。點擊「重新授權內核」後，系統會請求一次系統管理員授權。",
   "tun.permissions.reauthorize": "重新授權內核",

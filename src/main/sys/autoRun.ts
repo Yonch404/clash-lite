@@ -9,6 +9,10 @@ import { managerLogger } from '../utils/logger'
 
 const appName = 'clash-lite'
 
+function quoteDesktopExec(value: string): string {
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+}
+
 function getTaskXml(): string {
   return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
@@ -135,7 +139,7 @@ export async function enableAutoRun(): Promise<void> {
     let desktop = `
 [Desktop Entry]
 Name=Clash Lite
-Exec=${exePath()} %U
+Exec=${quoteDesktopExec(exePath())} %U
 Terminal=false
 Type=Application
 Icon=clash-lite

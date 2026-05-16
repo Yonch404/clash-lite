@@ -398,6 +398,8 @@
   "tun.permissions.failed": "Permission authorization failed",
   "tun.permissions.serviceTitle": "Install TUN Privilege Task",
   "tun.permissions.serviceMessage": "Clash Lite needs to create an elevated background task to start the TUN core. This only requires authorization once; normal launches will not ask for administrator privileges again.",
+  "tun.permissions.linuxServiceMessage": "Clash Lite needs to install or repair the Linux TUN privilege service. This only requires authorization once; core restarts will no longer repeatedly ask for DNS, interface, or route permissions.",
+  "tun.permissions.serviceUnavailable": "The Linux TUN privilege service is unavailable. Reinstall or repair Clash Lite and try again.",
   "tun.permissions.reauthorizeTitle": "Core Reauthorization Required",
   "tun.permissions.reauthorizeMessage": "Clash Lite needs to grant the Mihomo core the network permissions required by TUN. After clicking \"Reauthorize Core\", the system will request administrator authorization once.",
   "tun.permissions.reauthorize": "Reauthorize Core",

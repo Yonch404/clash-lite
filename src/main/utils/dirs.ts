@@ -141,3 +141,7 @@ export function windowsCoreHelperPidPath(): string {
 export function windowsControllerSecretPath(): string {
   return path.join(dataDir(), 'windows-controller-secret')
 }
+
+export function linuxControllerSecretPath(): string {
+  return path.join(dataDir(), 'linux-controller-secret')
+}

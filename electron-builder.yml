@@ -2,6 +2,7 @@ appId: lite.clash.app
 productName: Clash Lite
 directories:
   buildResources: build
+afterPack: build/after-pack.cjs
 files:
   - '!**/.vscode/*'
   - '!src/*'
@@ -38,8 +39,12 @@ nsis:
   createDesktopShortcut: always
   include: build/installer.nsh
 linux:
+  extraResources:
+    - from: './build/linux/core-helper.sh'
+      to: 'files/linux-core-helper.sh'
   executableName: clash-lite
   icon: build/icons/clash-lite.svg
+  appArmorProfile: build/linux/apparmor-profile
   desktop:
     entry:
       Name: Clash Lite

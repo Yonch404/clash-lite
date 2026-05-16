@@ -10,6 +10,7 @@ import { mihomoWorkConfigPath } from '../utils/dirs'
 import { generateProfile, getRuntimeConfig } from './factory'
 import { getMihomoIpcPath } from './manager'
 import { getWindowsControllerEndpoint } from './windowsElevated'
+import { getLinuxControllerEndpoint, shouldUseLinuxElevatedCoreHelper } from './linuxElevated'
 import { ensureTunCorePrivilege } from './permissions'
 
 const mihomoApiLogger = createLogger('MihomoApi')
@@ -59,6 +60,31 @@ async function getMihomoApiConnection(): Promise<MihomoApiConnection> {
       getWsUrl: (path) => `ws://${endpoint.host}:${endpoint.port}${path}`,
       wsOptions: {
         headers: authHeaders
+      }
+    }
+  }
+
+  if (process.platform === 'linux') {
+    const { tun } = await getControledMihomoConfig()
+    if ((tun?.enable ?? true) && shouldUseLinuxElevatedCoreHelper()) {
+      const endpoint = await getLinuxControllerEndpoint()
+      const authHeaders = {
+        Authorization: `Bearer ${endpoint.secret}`
+      }
+      const baseURL = `http://${endpoint.host}:${endpoint.port}`
+
+      return {
+        key: `tcp:${baseURL}:${endpoint.secret}`,
+        displayKey: `tcp:${baseURL}`,
+        axiosConfig: {
+          baseURL,
+          timeout: 15000,
+          headers: authHeaders
+        },
+        getWsUrl: (innerPath) => `ws://${endpoint.host}:${endpoint.port}${innerPath}`,
+        wsOptions: {
+          headers: authHeaders
+        }
       }
     }
   }
@@ -380,7 +406,11 @@ export const mihomoUpgrade = async (): Promise<void> => {
   await instance.post('/upgrade', undefined, { timeout: 90000 })
 
   const { tun } = await getControledMihomoConfig()
-  if (process.platform === 'linux' && (tun?.enable ?? true)) {
+  if (
+    process.platform === 'linux' &&
+    (tun?.enable ?? true) &&
+    !shouldUseLinuxElevatedCoreHelper()
+  ) {
     const hasPrivilege = await ensureTunCorePrivilege({ prompt: true })
     if (!hasPrivilege) {
       throw new Error(i18next.t('tun.permissions.reauthorizeCancelled'))

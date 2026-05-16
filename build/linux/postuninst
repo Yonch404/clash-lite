@@ -2,8 +2,22 @@
 
 case "$1" in
   remove|purge|0)
+    APP_BIN='/opt/clash-lite/clash-lite'
+
+    if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
+        systemctl stop clash-lite-core-helper.service >/dev/null 2>&1 || true
+        systemctl disable clash-lite-core-helper.service >/dev/null 2>&1 || true
+        rm -f /etc/systemd/system/clash-lite-core-helper.service 2>/dev/null || true
+        systemctl daemon-reload >/dev/null 2>&1 || true
+        systemctl reset-failed clash-lite-core-helper.service >/dev/null 2>&1 || true
+    else
+        rm -f /etc/systemd/system/clash-lite-core-helper.service 2>/dev/null || true
+    fi
+
+    rm -rf /run/clash-lite-core 2>/dev/null || true
+
     if type update-alternatives >/dev/null 2>&1; then
-        update-alternatives --remove 'clash-lite' '/opt/Clash Lite/clash-lite' 2>/dev/null || true
+        update-alternatives --remove 'clash-lite' "$APP_BIN" 2>/dev/null || true
     fi
     
     [ -L '/usr/bin/clash-lite' ] && rm -f '/usr/bin/clash-lite'

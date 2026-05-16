@@ -2,23 +2,51 @@
 
 set -e
 
+APP_DIR='/opt/clash-lite'
+APP_BIN="$APP_DIR/clash-lite"
+CORE_BIN="$APP_DIR/resources/sidecar/mihomo"
+HELPER_BIN="$APP_DIR/resources/files/linux-core-helper.sh"
+
 if type update-alternatives >/dev/null 2>&1; then
     # Remove previous link if it doesn't use update-alternatives
     if [ -L '/usr/bin/clash-lite' ] && [ -e '/usr/bin/clash-lite' ] && [ "$(readlink '/usr/bin/clash-lite')" != '/etc/alternatives/clash-lite' ]; then
         rm -f '/usr/bin/clash-lite'
     fi
-    update-alternatives --install '/usr/bin/clash-lite' 'clash-lite' '/opt/Clash Lite/clash-lite' 100 || ln -sf '/opt/Clash Lite/clash-lite' '/usr/bin/clash-lite'
+    update-alternatives --install '/usr/bin/clash-lite' 'clash-lite' "$APP_BIN" 100 || ln -sf "$APP_BIN" '/usr/bin/clash-lite'
 else
-    ln -sf '/opt/Clash Lite/clash-lite' '/usr/bin/clash-lite'
+    ln -sf "$APP_BIN" '/usr/bin/clash-lite'
 fi
 
-chmod 4755 '/opt/Clash Lite/chrome-sandbox' 2>/dev/null || true
+chmod 4755 "$APP_DIR/chrome-sandbox" 2>/dev/null || true
 
-if [ -f '/opt/Clash Lite/resources/sidecar/mihomo' ]; then
-    chmod 0755 '/opt/Clash Lite/resources/sidecar/mihomo' 2>/dev/null || true
+if [ -f "$CORE_BIN" ]; then
+    chmod 0755 "$CORE_BIN" 2>/dev/null || true
     if command -v setcap >/dev/null 2>&1; then
-        setcap 'cap_net_admin,cap_net_bind_service+ep' '/opt/Clash Lite/resources/sidecar/mihomo' 2>/dev/null || true
+        setcap 'cap_net_admin,cap_net_bind_service+ep' "$CORE_BIN" 2>/dev/null || true
     fi
+fi
+
+if [ -f "$HELPER_BIN" ]; then
+    chmod 0755 "$HELPER_BIN" 2>/dev/null || true
+fi
+
+if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
+    cat > /etc/systemd/system/clash-lite-core-helper.service <<'EOF'
+[Unit]
+Description=Clash Lite Core Helper
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/opt/clash-lite/resources/files/linux-core-helper.sh
+Restart=on-failure
+RestartSec=1s
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    systemctl enable --now clash-lite-core-helper.service >/dev/null 2>&1 || true
 fi
 
 if hash update-mime-database 2>/dev/null; then

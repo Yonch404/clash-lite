@@ -1,0 +1,4 @@
+*.sh text eol=lf
+build/linux/postinst text eol=lf
+build/linux/postuninst text eol=lf
+build/linux/apparmor-profile text eol=lf

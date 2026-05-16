@@ -377,6 +377,8 @@
   "tun.permissions.failed": "مجوزدهی ناموفق بود",
   "tun.permissions.serviceTitle": "نصب وظیفه دسترسی TUN",
   "tun.permissions.serviceMessage": "Clash Lite باید یک وظیفه پس‌زمینه با دسترسی بالا برای اجرای هسته TUN ایجاد کند. این مجوز فقط یک‌بار لازم است و اجرای عادی برنامه دوباره دسترسی مدیر درخواست نمی‌کند.",
+  "tun.permissions.linuxServiceMessage": "Clash Lite باید سرویس دسترسی Linux TUN را نصب یا تعمیر کند. این مجوز فقط یک‌بار لازم است و راه‌اندازی دوباره هسته دیگر برای DNS، رابط شبکه یا مسیرها چندباره درخواست مجوز نمی‌کند.",
+  "tun.permissions.serviceUnavailable": "سرویس دسترسی Linux TUN در دسترس نیست. Clash Lite را دوباره نصب یا تعمیر کنید و دوباره تلاش کنید.",
   "tun.permissions.reauthorizeTitle": "مجوزدهی دوباره به هسته لازم است",
   "tun.permissions.reauthorizeMessage": "Clash Lite باید مجوزهای شبکه مورد نیاز TUN را به هسته Mihomo بدهد. پس از کلیک روی «مجوزدهی دوباره به هسته»، سیستم یک‌بار مجوز مدیر درخواست می‌کند.",
   "tun.permissions.reauthorize": "مجوزدهی دوباره به هسته",

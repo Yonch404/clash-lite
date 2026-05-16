@@ -46,6 +46,13 @@ import {
   stopWindowsElevatedCore,
   type WindowsCoreHelperRequest
 } from './windowsElevated'
+import {
+  getLinuxControllerEndpoint,
+  shouldUseLinuxElevatedCoreHelper,
+  startLinuxElevatedCore,
+  stopLinuxElevatedCore,
+  type LinuxCoreHelperRequest
+} from './linuxElevated'
 
 // 重新导出权限相关函数
 export {
@@ -68,7 +75,7 @@ const unixCtlParam = '-ext-ctl-unix'
 let child: ChildProcess | null = null
 let retry = 10
 let isRestarting = false
-let coreLaunchMode: 'local' | 'windows-elevated-task' | null = null
+let coreLaunchMode: 'local' | 'windows-elevated-task' | 'linux-elevated-helper' | null = null
 
 // 文件监听器
 let coreWatcher: FSWatcher | null = null
@@ -87,7 +94,11 @@ export function initCoreWatcher(): void {
     await new Promise((resolve) => setTimeout(resolve, 3000))
     try {
       const mihomoConfig = await getControledMihomoConfig()
-      if (process.platform === 'linux' && (mihomoConfig.tun?.enable ?? true)) {
+      if (
+        process.platform === 'linux' &&
+        (mihomoConfig.tun?.enable ?? true) &&
+        !shouldUseLinuxElevatedCoreHelper()
+      ) {
         await ensureTunCorePrivilege({ prompt: true })
       }
       await stopCore(true)
@@ -143,6 +154,7 @@ interface CoreConfig {
   cpuPriority: string
   detached: boolean
   useWindowsElevatedTask: boolean
+  useLinuxElevatedHelper: boolean
 }
 
 // 准备核心配置
@@ -158,8 +170,10 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
   const tunEnabled = tun?.enable ?? true
   const useWindowsElevatedTask =
     process.platform === 'win32' && tunEnabled && !getSessionAdminStatus()
+  const useLinuxElevatedHelper =
+    process.platform === 'linux' && tunEnabled && shouldUseLinuxElevatedCoreHelper()
 
-  if (process.platform === 'linux' && (tun?.enable ?? true)) {
+  if (process.platform === 'linux' && tunEnabled && !useLinuxElevatedHelper) {
     const hasTunPrivilege = await ensureTunCorePrivilege({ prompt: true })
     if (!hasTunPrivilege) {
       throw new Error(i18next.t('tun.error.linuxTunPermissionDenied'))
@@ -195,10 +209,13 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
 
   const windowsController =
     process.platform === 'win32' ? await getWindowsControllerEndpoint() : undefined
-  const controllerParam = process.platform === 'win32' ? '-ext-ctl' : unixCtlParam
+  const linuxController = useLinuxElevatedHelper ? await getLinuxControllerEndpoint() : undefined
+  const controllerParam = windowsController || linuxController ? '-ext-ctl' : unixCtlParam
   const controllerAddress = windowsController
     ? `${windowsController.host}:${windowsController.port}`
-    : getMihomoIpcPath()
+    : linuxController
+      ? `${linuxController.host}:${linuxController.port}`
+      : getMihomoIpcPath()
   const workDir = diffWorkDir ? mihomoProfileWorkDir(current) : mihomoWorkDir()
   const configPath = diffWorkDir ? mihomoWorkConfigPath(current) : mihomoWorkConfigPath('work')
 
@@ -210,12 +227,13 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
     configPath,
     controllerParam,
     controllerAddress,
-    controllerSecret: windowsController?.secret,
+    controllerSecret: windowsController?.secret || linuxController?.secret,
     tunEnabled,
     autoSetDNS: false,
     cpuPriority: mihomoCpuPriority,
     detached,
-    useWindowsElevatedTask
+    useWindowsElevatedTask,
+    useLinuxElevatedHelper
   }
 }
 
@@ -699,6 +717,24 @@ export async function startCore(detached = false, skipStop = false): Promise<Pro
     return [createTimedProviderReadyPromise()]
   }
 
+  if (config.useLinuxElevatedHelper) {
+    const [controllerHost, controllerPort] = config.controllerAddress.split(':')
+    const request: LinuxCoreHelperRequest = {
+      workDir: config.workDir,
+      controllerHost,
+      controllerPort: Number(controllerPort),
+      secret: config.controllerSecret || '',
+      logPath: coreLogPath(),
+      createdAt: Date.now()
+    }
+
+    await startLinuxElevatedCore(request)
+    coreLaunchMode = 'linux-elevated-helper'
+    child = null
+    await startMihomoRuntimeServices(config)
+    return [createTimedProviderReadyPromise()]
+  }
+
   if (process.platform === 'win32') {
     await stopWindowsElevatedCore()
   }
@@ -726,6 +762,8 @@ export async function stopCore(force = false): Promise<void> {
 
   if (coreLaunchMode === 'windows-elevated-task') {
     await stopWindowsElevatedCore()
+  } else if (coreLaunchMode === 'linux-elevated-helper') {
+    await stopLinuxElevatedCore()
   } else if (child) {
     child.removeAllListeners()
     child.kill('SIGINT')

@@ -379,6 +379,8 @@
   "tun.permissions.failed": "Не удалось получить разрешение",
   "tun.permissions.serviceTitle": "Установка задачи для прав TUN",
   "tun.permissions.serviceMessage": "Clash Lite нужно создать фоновую задачу с повышенными правами для запуска ядра TUN. Разрешение требуется только один раз; обычный запуск больше не будет запрашивать права администратора.",
+  "tun.permissions.linuxServiceMessage": "Clash Lite нужно установить или восстановить службу прав Linux TUN. Разрешение требуется только один раз; перезапуск ядра больше не будет повторно запрашивать права для DNS, интерфейсов или маршрутов.",
+  "tun.permissions.serviceUnavailable": "Служба прав Linux TUN недоступна. Переустановите или восстановите Clash Lite и попробуйте снова.",
   "tun.permissions.reauthorizeTitle": "Требуется повторная авторизация ядра",
   "tun.permissions.reauthorizeMessage": "Clash Lite нужно предоставить ядру Mihomo сетевые права, необходимые для TUN. После нажатия «Повторно авторизовать ядро» система запросит права администратора один раз.",
   "tun.permissions.reauthorize": "Повторно авторизовать ядро",
