@@ -327,7 +327,6 @@
   "proxies.mode.full": "Подробная информация",
   "proxies.mode.simple": "Краткая информация",
   "proxies.mode.direct": "Прямое подключение",
-  "proxies.search.placeholder": "Поиск прокси",
   "proxies.locate": "Найти текущий прокси",
   "sniffer.title": "Настройки анализа доменов",
   "sniffer.enable": "Включить анализ домена",

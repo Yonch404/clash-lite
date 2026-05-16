@@ -28,8 +28,6 @@ import type { Components, ContextProp, ScrollerProps } from 'react-virtuoso'
 import ProxyItem from '@renderer/components/proxies/proxy-item'
 import { IoIosArrowBack } from 'react-icons/io'
 import { useGroups } from '@renderer/hooks/use-groups'
-import CollapseInput from '@renderer/components/base/collapse-input'
-import { includesIgnoreCase } from '@renderer/utils/includes'
 import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-config'
 import { useTranslation } from 'react-i18next'
 
@@ -55,14 +53,11 @@ interface ProxyGroupHeaderProps {
   isOpen: boolean
   isDelaying: boolean
   currentProxyName: string
-  searchValue: string
   proxyDisplayMode: 'simple' | 'full'
-  searchPlaceholder: string
   locateTitle: string
   delayTestTitle: string
   onToggle: (groupName: string) => void
   onWarmUp: (groupName: string) => void
-  onSearchChange: (groupName: string, value: string) => void
   onLocate: (groupName: string) => void
   onGroupDelay: (groupName: string) => void
 }
@@ -379,14 +374,11 @@ const ProxyGroupHeader = memo(function ProxyGroupHeader(props: ProxyGroupHeaderP
     isOpen,
     isDelaying,
     currentProxyName,
-    searchValue,
     proxyDisplayMode,
-    searchPlaceholder,
     locateTitle,
     delayTestTitle,
     onToggle,
     onWarmUp,
-    onSearchChange,
     onLocate,
     onGroupDelay
   } = props
@@ -431,11 +423,6 @@ const ProxyGroupHeader = memo(function ProxyGroupHeader(props: ProxyGroupHeaderP
                   {group.allCount}
                 </Chip>
               )}
-              <CollapseInput
-                title={searchPlaceholder}
-                value={searchValue}
-                onValueChange={(value) => onSearchChange(group.name, value)}
-              />
               <Button
                 title={locateTitle}
                 variant="light"
@@ -589,8 +576,6 @@ const Proxies: React.FC = () => {
   const { virtuosoRef, isOpen, setIsOpen } = useProxyState(proxyGroups)
   const isOpenRef = useRef(isOpen)
   const [delaying, setDelaying] = useState<BooleanMap>({})
-  const [searchValue, setSearchValue] = useState<StringMap>({})
-  const searchValueRef = useRef(searchValue)
   const [iconSources, setIconSources] = useState<StringMap>({})
   const [groupDetails, setGroupDetails] = useState<Record<string, IMihomoMixedGroup | undefined>>(
     {}
@@ -616,10 +601,6 @@ const Proxies: React.FC = () => {
   useEffect(() => {
     isOpenRef.current = isOpen
   }, [isOpen])
-
-  useEffect(() => {
-    searchValueRef.current = searchValue
-  }, [searchValue])
 
   useEffect(() => {
     const groupSummaries = new Map(proxyGroups.map((group) => [group.name, group]))
@@ -902,15 +883,11 @@ const Proxies: React.FC = () => {
 
       const groupDetail = groupDetails[group.name]
       if (isOpen[group.name] && groupDetail) {
-        const filterValue = searchValue[group.name] ?? ''
-        const filtered = filterValue
-          ? groupDetail.all.filter((proxy) => includesIgnoreCase(proxy.name, filterValue))
-          : groupDetail.all
-        const count = Math.ceil(filtered.length / cols)
+        const count = Math.ceil(groupDetail.all.length / cols)
         for (let rowIndex = 0; rowIndex < count; rowIndex++) {
           const rowStart = rowIndex * cols
           const currentProxyName = groupDetail.now ?? group.now
-          const rowProxies = filtered.slice(rowStart, rowStart + cols)
+          const rowProxies = groupDetail.all.slice(rowStart, rowStart + cols)
           rows.push({
             type: 'proxy-row',
             key: `proxy-row:${group.name}:${rowIndex}`,
@@ -923,7 +900,7 @@ const Proxies: React.FC = () => {
       }
     })
     return { rows, groupRowOffsets, totalProxyRows }
-  }, [proxyGroups, groupDetails, isOpen, cols, searchValue])
+  }, [proxyGroups, groupDetails, isOpen, cols])
   const { rows, groupRowOffsets, totalProxyRows } = useStableProxyListLayout(proxyListLayout)
   const groupIndexByName = useMemo(() => {
     return new Map(proxyGroups.map((group, index) => [group.name, index]))
@@ -1028,13 +1005,6 @@ const Proxies: React.FC = () => {
     [ensureGroupDetail, setIsOpen]
   )
 
-  const onSearchGroup = useCallback((groupName: string, value: string): void => {
-    setSearchValue((prev) => {
-      if ((prev[groupName] ?? '') === value) return prev
-      return { ...prev, [groupName]: value }
-    })
-  }, [])
-
   const openGroup = useCallback(
     (groupName: string): void => {
       void ensureGroupDetail(groupName)
@@ -1053,11 +1023,7 @@ const Proxies: React.FC = () => {
 
       openGroup(groupName)
       const detail = await ensureGroupDetail(groupName)
-      const filterValue = searchValueRef.current[groupName] ?? ''
-      const proxies = filterValue
-        ? detail.all.filter((proxy) => includesIgnoreCase(proxy.name, filterValue))
-        : detail.all
-      const proxyIndex = proxies.findIndex((proxy) => proxy.name === detail.now)
+      const proxyIndex = detail.all.findIndex((proxy) => proxy.name === detail.now)
       if (proxyIndex < 0) return
 
       requestAnimationFrame(() => {
@@ -1148,14 +1114,11 @@ const Proxies: React.FC = () => {
             isOpen={Boolean(isOpen[group.name])}
             isDelaying={Boolean(delaying[group.name])}
             currentProxyName={groupDetails[group.name]?.now ?? group.now}
-            searchValue={searchValue[group.name] ?? ''}
             proxyDisplayMode={proxyDisplayMode}
-            searchPlaceholder={t('proxies.search.placeholder')}
             locateTitle={t('proxies.locate')}
             delayTestTitle={t('proxies.delay.test')}
             onToggle={onToggleGroup}
             onWarmUp={warmUpGroupDetail}
-            onSearchChange={onSearchGroup}
             onLocate={onLocateGroupProxy}
             onGroupDelay={onGroupDelay}
           />
@@ -1187,12 +1150,10 @@ const Proxies: React.FC = () => {
       isOpen,
       delaying,
       groupDetails,
-      searchValue,
       proxyDisplayMode,
       t,
       onToggleGroup,
       warmUpGroupDetail,
-      onSearchGroup,
       onLocateGroupProxy,
       onGroupDelay,
       proxyCols,

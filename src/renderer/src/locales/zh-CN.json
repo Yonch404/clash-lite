@@ -346,7 +346,6 @@
   "proxies.mode.full": "详细信息",
   "proxies.mode.simple": "简洁信息",
   "proxies.mode.direct": "直连模式",
-  "proxies.search.placeholder": "搜索节点",
   "proxies.locate": "定位到当前节点",
   "sniffer.title": "域名嗅探设置",
   "sniffer.enable": "启用域名嗅探",

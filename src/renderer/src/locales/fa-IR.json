@@ -325,7 +325,6 @@
   "proxies.mode.full": "اطلاعات کامل",
   "proxies.mode.simple": "اطلاعات ساده",
   "proxies.mode.direct": "حالت مستقیم",
-  "proxies.search.placeholder": "جستجوی پراکسی‌ها",
   "proxies.locate": "یافتن پراکسی فعلی",
   "sniffer.title": "تنظیمات تشخیص دامنه",
   "sniffer.enable": "فعال کردن قابلیت شنود دامنه",

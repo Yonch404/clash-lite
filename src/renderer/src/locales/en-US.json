@@ -346,7 +346,6 @@
   "proxies.mode.full": "Detailed Info",
   "proxies.mode.simple": "Simple Info",
   "proxies.mode.direct": "Direct Mode",
-  "proxies.search.placeholder": "Search Proxies",
   "proxies.locate": "Locate Current Proxy",
   "sniffer.title": "Domain Sniffing Settings",
   "sniffer.enable": "Enable Domain Sniffing",
