@@ -30,6 +30,7 @@ let logsStartToken = 0
 let connectionsStartToken = 0
 
 const MAX_RETRY = 10
+const EXPECTED_DELAY_FAILURE_STATUS_CODES = new Set([503, 504])
 
 interface MihomoApiConnection {
   key: string
@@ -108,6 +109,20 @@ function safelyDisposeWebSocket(ws: WebSocket | null): void {
   }
 }
 
+function isExpectedDelayFailure(error: unknown): boolean {
+  const axiosError = error as {
+    config?: { url?: string }
+    response?: { status?: number }
+  }
+  const status = axiosError.response?.status
+  const url = axiosError.config?.url ?? ''
+
+  return (
+    EXPECTED_DELAY_FAILURE_STATUS_CODES.has(status ?? 0) &&
+    /\/(?:proxies|group)\/.+\/delay$/u.test(url)
+  )
+}
+
 export const getAxios = async (force: boolean = false): Promise<AxiosInstance> => {
   const connection = await getMihomoApiConnection()
 
@@ -128,6 +143,8 @@ export const getAxios = async (force: boolean = false): Promise<AxiosInstance> =
     (error) => {
       if (error.code === 'ENOENT') {
         mihomoApiLogger.debug(`Pipe not ready: ${error.config?.socketPath}`)
+      } else if (isExpectedDelayFailure(error)) {
+        // Unavailable or timed-out proxies are expected results from mihomo delay tests.
       } else {
         mihomoApiLogger.error(
           `Axios error with endpoint ${connection.displayKey}: ${error.message}`

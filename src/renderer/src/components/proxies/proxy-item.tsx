@@ -49,9 +49,13 @@ const ProxyItemBase: React.FC<Props> = (props) => {
 
   const onDelay = useCallback((): void => {
     setLoading(true)
-    onProxyDelay(group.name, proxy.name, group.testUrl).finally(() => {
-      setLoading(false)
-    })
+    void onProxyDelay(group.name, proxy.name, group.testUrl)
+      .catch(() => {
+        // Delay test failures are reflected by the proxy delay state.
+      })
+      .finally(() => {
+        setLoading(false)
+      })
   }, [group.name, group.testUrl, proxy.name, onProxyDelay])
 
   return (

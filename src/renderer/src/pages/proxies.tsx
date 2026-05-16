@@ -319,6 +319,24 @@ function updateGroupProxyDelay(
   return changed ? { ...detail, all } : detail
 }
 
+function isProxyDelayFailure(error: unknown): boolean {
+  if (!error) return false
+  if (typeof error === 'string') {
+    return /delay test|timeout|timed out|status code 50[34]/iu.test(error)
+  }
+
+  if (typeof error === 'object') {
+    const value = error as { delay?: unknown; message?: unknown; status?: unknown }
+    if (typeof value.delay === 'number') return true
+    if (value.status === 503 || value.status === 504) return true
+    if (typeof value.message === 'string') {
+      return /delay test|timeout|timed out|status code 50[34]/iu.test(value.message)
+    }
+  }
+
+  return false
+}
+
 function proxyDelayKey(groupName: string, proxyName: string): string {
   return `${groupName}\x1f${proxyName}`
 }
@@ -1230,7 +1248,17 @@ const Proxies: React.FC = () => {
 
   const onProxyDelay = useCallback(
     async (group: string, proxy: string, url?: string): Promise<IMihomoDelay> => {
-      const result = await mihomoProxyDelay(proxy, url)
+      let result: IMihomoDelay
+
+      try {
+        result = await mihomoProxyDelay(proxy, url)
+      } catch (error) {
+        if (!isProxyDelayFailure(error)) {
+          throw error
+        }
+        result = { delay: 0 }
+      }
+
       if (typeof result.delay === 'number') {
         setGroupDetails((prev) => {
           const detail = prev[group]
@@ -1242,7 +1270,14 @@ const Proxies: React.FC = () => {
           return { ...prev, [group]: nextDetail }
         })
       }
-      await ensureGroupDetail(group, true)
+
+      try {
+        await ensureGroupDetail(group, true)
+      } catch (error) {
+        if (!isProxyDelayFailure(error)) {
+          throw error
+        }
+      }
       return result
     },
     [ensureGroupDetail]
