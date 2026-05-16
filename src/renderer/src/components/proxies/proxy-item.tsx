@@ -9,7 +9,7 @@ interface Props {
   group: Pick<IMihomoGroup, 'name' | 'testUrl'>
   onSelect: (group: string, proxy: string) => void
   selected: boolean
-  isGroupTesting?: boolean
+  isDelayTesting?: boolean
 }
 
 function delayColor(delay: number): 'primary' | 'success' | 'warning' | 'danger' {
@@ -32,14 +32,14 @@ const ProxyItemBase: React.FC<Props> = (props) => {
     selected,
     onSelect,
     onProxyDelay,
-    isGroupTesting = false
+    isDelayTesting = false
   } = props
 
   const delay = latestDelay(proxy)
 
   const [loading, setLoading] = useState(false)
 
-  const isLoading = loading || isGroupTesting
+  const isLoading = loading || isDelayTesting
 
   const delayText = useMemo(() => {
     if (delay === -1) return t('proxies.delay.test')
@@ -153,7 +153,7 @@ const ProxyItem = React.memo(ProxyItemBase, (prevProps, nextProps) => {
     prevProps.group.testUrl === nextProps.group.testUrl &&
     prevProps.selected === nextProps.selected &&
     prevProps.proxyDisplayMode === nextProps.proxyDisplayMode &&
-    prevProps.isGroupTesting === nextProps.isGroupTesting
+    prevProps.isDelayTesting === nextProps.isDelayTesting
   )
 })
 

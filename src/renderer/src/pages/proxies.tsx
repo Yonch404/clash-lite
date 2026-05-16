@@ -70,7 +70,7 @@ interface ProxyRowProps {
   proxyDisplayMode: 'simple' | 'full'
   proxyCols: IAppConfig['proxyCols']
   proxyGridStyle?: CSSProperties
-  isGroupTesting: boolean
+  delayingProxyKeys: ReadonlySet<string>
   onProxyDelay: (group: string, proxy: string, url?: string) => Promise<IMihomoDelay>
   onSelect: (group: string, proxy: string) => void
 }
@@ -292,6 +292,23 @@ function updateGroupProxyDelay(
   return changed ? { ...detail, all } : detail
 }
 
+function proxyDelayKey(groupName: string, proxyName: string): string {
+  return `${groupName}\x1f${proxyName}`
+}
+
+function hasSameProxyDelayState(
+  previous: ReadonlySet<string>,
+  next: ReadonlySet<string>,
+  groupName: string,
+  proxies: (IMihomoProxy | IMihomoGroup)[]
+): boolean {
+  if (previous === next) return true
+  return proxies.every((proxy) => {
+    const key = proxyDelayKey(groupName, proxy.name)
+    return previous.has(key) === next.has(key)
+  })
+}
+
 function applySummaryToGroupDetail(
   detail: IMihomoMixedGroup,
   summary: IMihomoMixedGroupSummary
@@ -474,7 +491,7 @@ const ProxyRow = memo(
       proxyDisplayMode,
       proxyCols,
       proxyGridStyle,
-      isGroupTesting,
+      delayingProxyKeys,
       onProxyDelay,
       onSelect
     } = props
@@ -494,7 +511,7 @@ const ProxyRow = memo(
               group={{ name: groupName, testUrl: groupTestUrl }}
               proxyDisplayMode={proxyDisplayMode}
               selected={proxy.name === selectedProxyName}
-              isGroupTesting={isGroupTesting}
+              isDelayTesting={delayingProxyKeys.has(proxyDelayKey(groupName, proxy.name))}
             />
           )
         })}
@@ -508,7 +525,6 @@ const ProxyRow = memo(
       prevProps.proxyDisplayMode !== nextProps.proxyDisplayMode ||
       prevProps.proxyCols !== nextProps.proxyCols ||
       prevProps.proxyGridStyle !== nextProps.proxyGridStyle ||
-      prevProps.isGroupTesting !== nextProps.isGroupTesting ||
       prevProps.onProxyDelay !== nextProps.onProxyDelay ||
       prevProps.onSelect !== nextProps.onSelect ||
       prevProps.selectedProxyName !== nextProps.selectedProxyName
@@ -516,7 +532,15 @@ const ProxyRow = memo(
       return false
     }
 
-    return hasSameProxyArray(prevProps.proxies, nextProps.proxies)
+    return (
+      hasSameProxyArray(prevProps.proxies, nextProps.proxies) &&
+      hasSameProxyDelayState(
+        prevProps.delayingProxyKeys,
+        nextProps.delayingProxyKeys,
+        prevProps.groupName,
+        prevProps.proxies
+      )
+    )
   }
 )
 
@@ -576,6 +600,7 @@ const Proxies: React.FC = () => {
   const { virtuosoRef, isOpen, setIsOpen } = useProxyState(proxyGroups)
   const isOpenRef = useRef(isOpen)
   const [delaying, setDelaying] = useState<BooleanMap>({})
+  const [delayingProxyKeys, setDelayingProxyKeys] = useState<Set<string>>(() => new Set())
   const [iconSources, setIconSources] = useState<StringMap>({})
   const [groupDetails, setGroupDetails] = useState<Record<string, IMihomoMixedGroup | undefined>>(
     {}
@@ -588,6 +613,8 @@ const Proxies: React.FC = () => {
   const groupDetailGenerationRef = useRef(0)
   const staleGroupDetailsRef = useRef(new Set<string>())
   const activeRefreshRunningRef = useRef(false)
+  const pendingProxyDelaysRef = useRef(new Map<string, Map<string, number>>())
+  const proxyDelayFlushTimerRef = useRef<number | null>(null)
   const [groupDetailRefreshTick, setGroupDetailRefreshTick] = useState(0)
 
   useEffect(() => {
@@ -601,6 +628,108 @@ const Proxies: React.FC = () => {
   useEffect(() => {
     isOpenRef.current = isOpen
   }, [isOpen])
+
+  const flushPendingProxyDelays = useCallback((): void => {
+    if (proxyDelayFlushTimerRef.current !== null) {
+      window.clearTimeout(proxyDelayFlushTimerRef.current)
+      proxyDelayFlushTimerRef.current = null
+    }
+
+    const pendingDelays = pendingProxyDelaysRef.current
+    if (pendingDelays.size === 0) return
+
+    pendingProxyDelaysRef.current = new Map()
+    setGroupDetails((prev) => {
+      let next = prev
+
+      for (const [groupName, proxyDelays] of pendingDelays) {
+        const detail = next[groupName]
+        if (!detail) continue
+
+        let nextDetail = detail
+        for (const [proxyName, delay] of proxyDelays) {
+          nextDetail = updateGroupProxyDelay(nextDetail, proxyName, delay)
+        }
+
+        if (nextDetail !== detail) {
+          if (next === prev) {
+            next = { ...prev }
+          }
+          next[groupName] = nextDetail
+        }
+      }
+
+      return next
+    })
+  }, [])
+
+  const queueProxyDelay = useCallback(
+    (groupName: string, proxyName: string, delay: number): void => {
+      let groupDelays = pendingProxyDelaysRef.current.get(groupName)
+      if (!groupDelays) {
+        groupDelays = new Map()
+        pendingProxyDelaysRef.current.set(groupName, groupDelays)
+      }
+      groupDelays.set(proxyName, delay)
+
+      if (proxyDelayFlushTimerRef.current !== null) return
+      proxyDelayFlushTimerRef.current = window.setTimeout(flushPendingProxyDelays, 50)
+    },
+    [flushPendingProxyDelays]
+  )
+
+  const setProxyDelaying = useCallback(
+    (groupName: string, proxyName: string, isDelaying: boolean): void => {
+      const key = proxyDelayKey(groupName, proxyName)
+      setDelayingProxyKeys((prev) => {
+        if (prev.has(key) === isDelaying) return prev
+
+        const next = new Set(prev)
+        if (isDelaying) {
+          next.add(key)
+        } else {
+          next.delete(key)
+        }
+        return next
+      })
+    },
+    []
+  )
+
+  const setGroupProxiesDelaying = useCallback(
+    (groupName: string, proxyNames: string[], isDelaying: boolean): void => {
+      if (proxyNames.length === 0) return
+
+      setDelayingProxyKeys((prev) => {
+        let changed = false
+        const next = new Set(prev)
+
+        for (const proxyName of proxyNames) {
+          const key = proxyDelayKey(groupName, proxyName)
+          if (isDelaying) {
+            if (!next.has(key)) {
+              next.add(key)
+              changed = true
+            }
+          } else if (next.delete(key)) {
+            changed = true
+          }
+        }
+
+        return changed ? next : prev
+      })
+    },
+    []
+  )
+
+  useEffect(() => {
+    return (): void => {
+      if (proxyDelayFlushTimerRef.current !== null) {
+        window.clearTimeout(proxyDelayFlushTimerRef.current)
+        proxyDelayFlushTimerRef.current = null
+      }
+    }
+  }, [])
 
   useEffect(() => {
     const groupSummaries = new Map(proxyGroups.map((group) => [group.name, group]))
@@ -1042,11 +1171,14 @@ const Proxies: React.FC = () => {
       if (index === undefined) return
 
       setDelaying((prev) => ({ ...prev, [groupName]: true }))
+      let testingProxyNames: string[] = []
 
       try {
         openGroup(groupName)
         const detail = await ensureGroupDetail(groupName)
         const proxies = detail.all.filter(Boolean)
+        testingProxyNames = proxies.map((proxy) => proxy.name)
+        setGroupProxiesDelaying(groupName, testingProxyNames, true)
 
         // 限制并发数量
         const result: Promise<void>[] = []
@@ -1054,9 +1186,14 @@ const Proxies: React.FC = () => {
         for (const proxy of proxies) {
           const promise = Promise.resolve().then(async () => {
             try {
-              await mihomoProxyDelay(proxy.name, proxyGroups[index].testUrl)
+              const delay = await mihomoProxyDelay(proxy.name, proxyGroups[index].testUrl)
+              if (typeof delay.delay === 'number') {
+                queueProxyDelay(groupName, proxy.name, delay.delay)
+              }
             } catch {
               // ignore
+            } finally {
+              setProxyDelaying(groupName, proxy.name, false)
             }
           })
           result.push(promise)
@@ -1069,13 +1206,26 @@ const Proxies: React.FC = () => {
           }
         }
         await Promise.all(result)
+        flushPendingProxyDelays()
         await ensureGroupDetail(groupName, true)
         mutate()
       } finally {
+        setGroupProxiesDelaying(groupName, testingProxyNames, false)
         setDelaying((prev) => ({ ...prev, [groupName]: false }))
       }
     },
-    [delayTestConcurrency, ensureGroupDetail, groupIndexByName, mutate, openGroup, proxyGroups]
+    [
+      delayTestConcurrency,
+      ensureGroupDetail,
+      flushPendingProxyDelays,
+      groupIndexByName,
+      mutate,
+      openGroup,
+      proxyGroups,
+      queueProxyDelay,
+      setGroupProxiesDelaying,
+      setProxyDelaying
+    ]
   )
 
   const calcCols = useCallback((): number => {
@@ -1138,7 +1288,7 @@ const Proxies: React.FC = () => {
           proxyDisplayMode={proxyDisplayMode}
           proxyCols={proxyCols}
           proxyGridStyle={proxyGridStyle}
-          isGroupTesting={Boolean(delaying[group.name])}
+          delayingProxyKeys={delayingProxyKeys}
           onProxyDelay={onProxyDelay}
           onSelect={onChangeProxy}
         />
@@ -1149,6 +1299,7 @@ const Proxies: React.FC = () => {
       iconSources,
       isOpen,
       delaying,
+      delayingProxyKeys,
       groupDetails,
       proxyDisplayMode,
       t,
