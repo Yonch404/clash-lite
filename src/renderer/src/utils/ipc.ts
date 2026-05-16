@@ -55,6 +55,7 @@ interface IpcApi {
   changeCurrentProfile: (id: string) => Promise<void>
   addProfileUpdater: (item: IProfileItem) => Promise<void>
   removeProfileUpdater: (id: string) => Promise<void>
+  hasUsableCurrentProfile: () => Promise<boolean>
   // File
   getRuntimeConfig: () => Promise<IMihomoConfig>
   getRuntimeConfigStr: () => Promise<string>
@@ -151,6 +152,7 @@ export const {
   changeCurrentProfile,
   addProfileUpdater,
   removeProfileUpdater,
+  hasUsableCurrentProfile,
   // File
   getRuntimeConfig,
   getRuntimeConfigStr,

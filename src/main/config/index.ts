@@ -12,5 +12,6 @@ export {
   getProfileStr,
   setProfileStr,
   changeCurrentProfile,
-  updateProfileItem
+  updateProfileItem,
+  hasUsableCurrentProfile
 } from './profile'

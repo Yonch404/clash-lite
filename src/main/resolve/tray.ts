@@ -4,6 +4,7 @@ import {
   changeCurrentProfile,
   getAppConfig,
   getControledMihomoConfig,
+  hasUsableCurrentProfile,
   getProfileConfig,
   patchAppConfig,
   patchControledMihomoConfig
@@ -15,6 +16,7 @@ import { patchMihomoConfig } from '../core/mihomoApi'
 import { mainWindow, showMainWindow, triggerMainWindow } from '../window'
 import { dataDir, logDir, mihomoCoreDir, mihomoWorkDir } from '../utils/dirs'
 import { triggerSysProxy } from '../sys/sysproxy'
+import { syncConfiguredSysProxy } from '../runtime/networkGuard'
 import { quitWithoutCore } from '../core/manager'
 
 export let tray: Tray | null = null
@@ -117,6 +119,7 @@ export const buildContextMenu = async (): Promise<Menu> => {
           click: async (): Promise<void> => {
             if (item.id === current) return
             await changeCurrentProfile(item.id)
+            await syncConfiguredSysProxy()
             mainWindow?.webContents.send('profileConfigUpdated')
             ipcMain.emit('updateTrayMenu')
             await updateTrayIcon()
@@ -302,10 +305,14 @@ export async function hideDockIcon(): Promise<void> {
 async function updateTrayToolTip(): Promise<void> {
   if (!tray) return
 
-  const [mihomoConfig, appConfig] = await Promise.all([getControledMihomoConfig(), getAppConfig()])
+  const [mihomoConfig, appConfig, profileUsable] = await Promise.all([
+    getControledMihomoConfig(),
+    getAppConfig(),
+    hasUsableCurrentProfile()
+  ])
   const { mode } = mihomoConfig
-  const sysProxy = appConfig.sysProxy.enable
-  const tunStatus = mihomoConfig.tun?.enable ?? true
+  const sysProxy = profileUsable && appConfig.sysProxy.enable
+  const tunStatus = profileUsable && (mihomoConfig.tun?.enable ?? true)
 
   const modeLabel =
     mode === 'global'

@@ -1,6 +1,6 @@
 import { triggerAutoProxy, triggerManualProxy } from 'sysproxy-rs'
 import { net } from 'electron'
-import { getAppConfig, getControledMihomoConfig } from '../config'
+import { getAppConfig, getControledMihomoConfig, hasUsableCurrentProfile } from '../config'
 import { pacPort, startPacServer, stopPacServer } from '../resolve/server'
 import { proxyLogger } from '../utils/logger'
 
@@ -51,8 +51,9 @@ const defaultBypass: string[] = (() => {
 })()
 
 export async function triggerSysProxy(enable: boolean): Promise<void> {
+  const canEnable = enable && (await hasUsableCurrentProfile())
   if (net.isOnline()) {
-    if (enable) {
+    if (canEnable) {
       await disableSysProxy()
       await enableSysProxy()
     } else {

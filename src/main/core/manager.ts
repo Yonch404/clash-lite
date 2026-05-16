@@ -7,7 +7,7 @@ import { existsSync } from 'fs'
 import chokidar, { FSWatcher } from 'chokidar'
 import { app, ipcMain } from 'electron'
 import { mainWindow } from '../window'
-import { getAppConfig, getControledMihomoConfig } from '../config'
+import { getAppConfig, getControledMihomoConfig, hasUsableCurrentProfile } from '../config'
 import {
   dataDir,
   coreLogPath,
@@ -93,9 +93,13 @@ export function initCoreWatcher(): void {
     // 等待核心自我更新完成，避免与核心自动重启产生竞态
     await new Promise((resolve) => setTimeout(resolve, 3000))
     try {
-      const mihomoConfig = await getControledMihomoConfig()
+      const [mihomoConfig, profileUsable] = await Promise.all([
+        getControledMihomoConfig(),
+        hasUsableCurrentProfile()
+      ])
       if (
         process.platform === 'linux' &&
+        profileUsable &&
         (mihomoConfig.tun?.enable ?? true) &&
         !shouldUseLinuxElevatedCoreHelper()
       ) {
@@ -161,13 +165,17 @@ interface CoreConfig {
 async function prepareCore(detached: boolean, skipStop = false): Promise<CoreConfig> {
   await ensureRuntimeFiles()
 
-  const [appConfig, mihomoConfig] = await Promise.all([getAppConfig(), getControledMihomoConfig()])
+  const [appConfig, mihomoConfig, profileUsable] = await Promise.all([
+    getAppConfig(),
+    getControledMihomoConfig(),
+    hasUsableCurrentProfile()
+  ])
 
   const { diffWorkDir = false, mihomoCpuPriority = 'PRIORITY_NORMAL' } = appConfig
   const core = 'mihomo'
 
   const { tun } = mihomoConfig
-  const tunEnabled = tun?.enable ?? true
+  const tunEnabled = profileUsable && (tun?.enable ?? true)
   const useWindowsElevatedTask =
     process.platform === 'win32' && tunEnabled && !getSessionAdminStatus()
   const useLinuxElevatedHelper =

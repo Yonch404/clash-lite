@@ -37,10 +37,12 @@ import {
   getProfileStr,
   setProfileStr,
   updateProfileItem,
-  setProfileConfig
+  setProfileConfig,
+  hasUsableCurrentProfile
 } from '../config'
 import { quitWithoutCore, restartCore } from '../core/manager'
 import { triggerSysProxy } from '../sys/sysproxy'
+import { syncConfiguredSysProxy } from '../runtime/networkGuard'
 import { checkUpdate, downloadAndInstallUpdate } from '../resolve/autoUpdater'
 import {
   getFilePath,
@@ -114,6 +116,42 @@ async function setTitleBarOverlay(overlay: Electron.TitleBarOverlayOptions): Pro
   }
 }
 
+async function addProfileItemWithNetworkRestore(item: Partial<IProfileItem>): Promise<void> {
+  const hadUsableProfile = await hasUsableCurrentProfile()
+  await addProfileItem(item)
+
+  if (hadUsableProfile) return
+  await syncConfiguredSysProxy()
+  mainWindow?.webContents.send('profileConfigUpdated')
+}
+
+async function changeCurrentProfileWithNetworkSync(id: string): Promise<void> {
+  await changeCurrentProfile(id)
+  await syncConfiguredSysProxy()
+  mainWindow?.webContents.send('profileConfigUpdated')
+}
+
+async function removeProfileItemWithNetworkSync(id: string): Promise<void> {
+  await removeProfileItem(id)
+  await syncConfiguredSysProxy()
+  mainWindow?.webContents.send('profileConfigUpdated')
+}
+
+async function setProfileStrWithNetworkSync(id: string, str: string): Promise<void> {
+  await setProfileStr(id, str)
+  await syncConfiguredSysProxy()
+  mainWindow?.webContents.send('profileConfigUpdated')
+}
+
+async function importLocalBackupWithNetworkSync(): Promise<boolean> {
+  const imported = await importLocalBackup()
+  if (imported) {
+    await syncConfiguredSysProxy()
+    mainWindow?.webContents.send('profileConfigUpdated')
+  }
+  return imported
+}
+
 const asyncHandlers: Record<string, AsyncFn> = {
   // Mihomo API
   mihomoVersion,
@@ -148,13 +186,14 @@ const asyncHandlers: Record<string, AsyncFn> = {
   getCurrentProfileItem,
   getProfileItem,
   getProfileStr,
-  setProfileStr,
-  addProfileItem,
-  removeProfileItem,
+  setProfileStr: setProfileStrWithNetworkSync,
+  addProfileItem: addProfileItemWithNetworkRestore,
+  removeProfileItem: removeProfileItemWithNetworkSync,
   updateProfileItem,
-  changeCurrentProfile,
+  changeCurrentProfile: changeCurrentProfileWithNetworkSync,
   addProfileUpdater,
   removeProfileUpdater,
+  hasUsableCurrentProfile,
   // File
   getRuntimeConfig,
   getRuntimeConfigStr,
@@ -174,7 +213,7 @@ const asyncHandlers: Record<string, AsyncFn> = {
   downloadAndInstallUpdate,
   // Backup
   exportLocalBackup,
-  importLocalBackup,
+  importLocalBackup: importLocalBackupWithNetworkSync,
   // Theme
   applyTheme,
   updateTrayIcon,

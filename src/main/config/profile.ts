@@ -16,6 +16,7 @@ import { mihomoProfileWorkDir, mihomoWorkDir, profileConfigPath, profilePath } f
 import { createLogger } from '../utils/logger'
 import { getAppConfig } from './app'
 import { getControledMihomoConfig } from './controledMihomo'
+import { hasUsableMihomoProfile } from './profileAvailability'
 
 const profileLogger = createLogger('Profile')
 const execFilePromise = promisify(execFile)
@@ -427,6 +428,17 @@ export async function getProfile(id: string | undefined): Promise<IMihomoConfig>
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     throw new Error(`Failed to parse profile "${id}": ${msg}`)
+  }
+}
+
+export async function hasUsableCurrentProfile(): Promise<boolean> {
+  try {
+    const { current } = await getProfileConfig()
+    const profile = await getProfile(current)
+    return hasUsableMihomoProfile(profile)
+  } catch (error) {
+    profileLogger.warn('Failed to check current profile availability', error)
+    return false
   }
 }
 

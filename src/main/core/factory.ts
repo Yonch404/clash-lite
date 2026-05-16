@@ -2,6 +2,7 @@ import { copyFile, mkdir, stat, writeFile } from 'fs/promises'
 import { existsSync } from 'fs'
 import path from 'path'
 import { getControledMihomoConfig, getProfileConfig, getProfile, getAppConfig } from '../config'
+import { hasUsableMihomoProfile } from '../config/profileAvailability'
 import { mihomoProfileWorkDir, mihomoWorkConfigPath, mihomoWorkDir } from '../utils/dirs'
 import { stringify } from '../utils/yaml'
 import { deepMerge } from '../utils/merge'
@@ -28,12 +29,13 @@ export async function generateProfile(): Promise<string | undefined> {
   const { current } = await getProfileConfig(true)
   const { diffWorkDir = false } = await getAppConfig()
   const baseProfile = await getProfile(current)
+  const profileUsable = hasUsableMihomoProfile(baseProfile)
   const controlledConfig = pickRuntimeControlledConfig(await getControledMihomoConfig())
   const profile = deepMerge(baseProfile, controlledConfig)
 
   profile.tun = {
     ...(baseProfile.tun || {}),
-    enable: controlledConfig.tun?.enable ?? true
+    enable: profileUsable && (controlledConfig.tun?.enable ?? true)
   } as IMihomoTunConfig
 
   if (!['silent', 'error', 'warning', 'info', 'debug'].includes(profile['log-level'])) {

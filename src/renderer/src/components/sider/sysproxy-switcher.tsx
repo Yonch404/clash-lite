@@ -2,6 +2,7 @@ import { Button, Card, CardBody, CardFooter, Tooltip } from '@heroui/react'
 import { toast } from '@renderer/components/base/toast'
 import BorderSwitch from '@renderer/components/base/border-swtich'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
+import { useProfileAvailability } from '@renderer/hooks/use-profile-availability'
 import { triggerSysProxy, updateTrayIcon } from '@renderer/utils/ipc'
 import { AiOutlineGlobal } from 'react-icons/ai'
 import React from 'react'
@@ -20,7 +21,12 @@ const SysproxySwitcher: React.FC<Props> = (props) => {
   const { appConfig, patchAppConfig } = useAppConfig()
   const { sysProxy, disableAnimations = false } = appConfig || {}
   const { enable } = sysProxy || {}
+  const profileUsable = useProfileAvailability()
+  const cardDisabled = !profileUsable
+  const displayEnabled = profileUsable && (enable ?? false)
   const onChange = async (enable: boolean): Promise<void> => {
+    if (!profileUsable) return
+
     const previousState = !enable
 
     try {
@@ -43,6 +49,7 @@ const SysproxySwitcher: React.FC<Props> = (props) => {
           <Button
             size="sm"
             isIconOnly
+            isDisabled={cardDisabled}
             color={match ? 'primary' : 'default'}
             variant={match ? 'solid' : 'light'}
             onPress={goToPage}
@@ -59,11 +66,13 @@ const SysproxySwitcher: React.FC<Props> = (props) => {
       <Card
         as="div"
         fullWidth
-        isPressable
+        isPressable={!cardDisabled}
         disableAnimation
-        onPointerDown={(event) => handleSiderCardPointerDown(event, goToPage)}
-        onPress={(event) => handleSiderCardPress(event, goToPage)}
-        className={siderCardClass(match, disableAnimations)}
+        onPointerDown={
+          cardDisabled ? undefined : (event) => handleSiderCardPointerDown(event, goToPage)
+        }
+        onPress={cardDisabled ? undefined : (event) => handleSiderCardPress(event, goToPage)}
+        className={`${siderCardClass(match, disableAnimations)} ${cardDisabled ? 'opacity-60' : ''}`}
       >
         <CardBody className="pb-1 pt-0 px-0">
           <div className="flex justify-between">
@@ -78,8 +87,9 @@ const SysproxySwitcher: React.FC<Props> = (props) => {
               />
             </Button>
             <BorderSwitch
-              isShowBorder={match && enable}
-              isSelected={enable ?? false}
+              isDisabled={cardDisabled}
+              isShowBorder={match && displayEnabled}
+              isSelected={displayEnabled}
               onValueChange={onChange}
             />
           </div>

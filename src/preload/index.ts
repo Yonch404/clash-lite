@@ -43,6 +43,7 @@ const validInvokeChannels = [
   'changeCurrentProfile',
   'addProfileUpdater',
   'removeProfileUpdater',
+  'hasUsableCurrentProfile',
   // File
   'getRuntimeConfig',
   'getRuntimeConfigStr',

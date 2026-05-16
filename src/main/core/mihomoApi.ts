@@ -1,7 +1,7 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios'
 import WebSocket from 'ws'
 import i18next from '../../shared/i18n'
-import { getAppConfig, getControledMihomoConfig } from '../config'
+import { getAppConfig, getControledMihomoConfig, hasUsableCurrentProfile } from '../config'
 import { mainWindow } from '../window'
 import { tray } from '../resolve/tray'
 import { calcTraffic } from '../utils/calc'
@@ -65,8 +65,11 @@ async function getMihomoApiConnection(): Promise<MihomoApiConnection> {
   }
 
   if (process.platform === 'linux') {
-    const { tun } = await getControledMihomoConfig()
-    if ((tun?.enable ?? true) && shouldUseLinuxElevatedCoreHelper()) {
+    const [{ tun }, profileUsable] = await Promise.all([
+      getControledMihomoConfig(),
+      hasUsableCurrentProfile()
+    ])
+    if (profileUsable && (tun?.enable ?? true) && shouldUseLinuxElevatedCoreHelper()) {
       const endpoint = await getLinuxControllerEndpoint()
       const authHeaders = {
         Authorization: `Bearer ${endpoint.secret}`
@@ -193,6 +196,15 @@ export async function mihomoVersion(): Promise<IMihomoVersion> {
 
 export const patchMihomoConfig = async (patch: Partial<IMihomoConfig>): Promise<void> => {
   invalidateVisibleMihomoGroupsDataCache()
+  if (patch.tun && !(await hasUsableCurrentProfile())) {
+    patch = {
+      ...patch,
+      tun: {
+        ...patch.tun,
+        enable: false
+      } as IMihomoTunConfig
+    }
+  }
   const instance = await getAxios()
   return await instance.patch('/configs', patch)
 }
@@ -405,9 +417,13 @@ export const mihomoUpgrade = async (): Promise<void> => {
   const instance = await getAxios()
   await instance.post('/upgrade', undefined, { timeout: 90000 })
 
-  const { tun } = await getControledMihomoConfig()
+  const [{ tun }, profileUsable] = await Promise.all([
+    getControledMihomoConfig(),
+    hasUsableCurrentProfile()
+  ])
   if (
     process.platform === 'linux' &&
+    profileUsable &&
     (tun?.enable ?? true) &&
     !shouldUseLinuxElevatedCoreHelper()
   ) {
@@ -738,11 +754,14 @@ const mihomoConnections = async (): Promise<void> => {
 }
 
 export async function SysProxyStatus(): Promise<boolean> {
-  const appConfig = await getAppConfig()
-  return appConfig.sysProxy.enable
+  const [appConfig, profileUsable] = await Promise.all([getAppConfig(), hasUsableCurrentProfile()])
+  return profileUsable && appConfig.sysProxy.enable
 }
 
 export const TunStatus = async (): Promise<boolean> => {
-  const config = await getControledMihomoConfig()
-  return config?.tun?.enable === true
+  const [config, profileUsable] = await Promise.all([
+    getControledMihomoConfig(),
+    hasUsableCurrentProfile()
+  ])
+  return profileUsable && config?.tun?.enable === true
 }

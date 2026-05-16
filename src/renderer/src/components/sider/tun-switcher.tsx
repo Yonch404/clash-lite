@@ -1,6 +1,7 @@
 import { Button, Card, CardBody, CardFooter, Tooltip } from '@heroui/react'
 import BorderSwitch from '@renderer/components/base/border-swtich'
 import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-config'
+import { useProfileAvailability } from '@renderer/hooks/use-profile-availability'
 import { TbDeviceIpadHorizontalBolt } from 'react-icons/tb'
 import React from 'react'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
@@ -21,8 +22,13 @@ const TunSwitcher: React.FC<Props> = (props) => {
   const { appConfig } = useAppConfig()
   const { disableAnimations = false } = appConfig || {}
   const { controledMihomoConfig, patchControledMihomoConfig } = useControledMihomoConfig()
-  const tunEnabled = controledMihomoConfig ? (controledMihomoConfig.tun?.enable ?? true) : false
+  const profileUsable = useProfileAvailability()
+  const cardDisabled = !profileUsable
+  const tunEnabled =
+    profileUsable && controledMihomoConfig ? (controledMihomoConfig.tun?.enable ?? true) : false
   const onChange = async (enable: boolean): Promise<void> => {
+    if (!profileUsable) return
+
     await patchControledMihomoConfig({ tun: { enable } })
     window.electron.ipcRenderer.send('updateTrayMenu')
     await window.electron.ipcRenderer.invoke('updateTrayIcon')
@@ -39,6 +45,7 @@ const TunSwitcher: React.FC<Props> = (props) => {
           <Button
             size="sm"
             isIconOnly
+            isDisabled={cardDisabled}
             color={match ? 'primary' : 'default'}
             variant={match ? 'solid' : 'light'}
             onPress={goToPage}
@@ -55,11 +62,13 @@ const TunSwitcher: React.FC<Props> = (props) => {
       <Card
         as="div"
         fullWidth
-        isPressable
+        isPressable={!cardDisabled}
         disableAnimation
-        onPointerDown={(event) => handleSiderCardPointerDown(event, goToPage)}
-        onPress={(event) => handleSiderCardPress(event, goToPage)}
-        className={siderCardClass(match, disableAnimations)}
+        onPointerDown={
+          cardDisabled ? undefined : (event) => handleSiderCardPointerDown(event, goToPage)
+        }
+        onPress={cardDisabled ? undefined : (event) => handleSiderCardPress(event, goToPage)}
+        className={`${siderCardClass(match, disableAnimations)} ${cardDisabled ? 'opacity-60' : ''}`}
       >
         <CardBody className="pb-1 pt-0 px-0">
           <div className="flex justify-between">
@@ -69,6 +78,7 @@ const TunSwitcher: React.FC<Props> = (props) => {
               />
             </Button>
             <BorderSwitch
+              isDisabled={cardDisabled}
               isShowBorder={match && tunEnabled}
               isSelected={tunEnabled}
               onValueChange={onChange}
