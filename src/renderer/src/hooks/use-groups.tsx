@@ -5,6 +5,7 @@ import { mihomoGroupSummaries } from '@renderer/utils/ipc'
 interface GroupsContextType {
   groups: IMihomoMixedGroupSummary[] | undefined
   mutate: () => void
+  updateGroups: (groups: IMihomoMixedGroupSummary[]) => void
 }
 
 const GroupsContext = createContext<GroupsContextType | undefined>(undefined)
@@ -72,10 +73,23 @@ export const GroupsProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       errorRetryInterval: 200,
       errorRetryCount: 10,
       refreshInterval: 30000,
-      dedupingInterval: 5000,
+      dedupingInterval: 0,
       keepPreviousData: true,
       revalidateOnFocus: false
     }
+  )
+
+  const refreshGroups = React.useCallback((): void => {
+    void mutate()
+  }, [mutate])
+
+  const updateGroups = React.useCallback(
+    (nextGroups: IMihomoMixedGroupSummary[]): void => {
+      const mergedGroups = mergeGroupSummaries(groupsRef.current, nextGroups)
+      groupsRef.current = mergedGroups
+      void mutate(mergedGroups, { revalidate: false })
+    },
+    [mutate]
   )
 
   React.useEffect(() => {
@@ -84,15 +98,19 @@ export const GroupsProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   React.useEffect(() => {
     const handler = (): void => {
-      mutate()
+      refreshGroups()
     }
     window.electron.ipcRenderer.on('groupsUpdated', handler)
     return (): void => {
       window.electron.ipcRenderer.removeListener('groupsUpdated', handler)
     }
-  }, [mutate])
+  }, [refreshGroups])
 
-  return <GroupsContext.Provider value={{ groups, mutate }}>{children}</GroupsContext.Provider>
+  return (
+    <GroupsContext.Provider value={{ groups, mutate: refreshGroups, updateGroups }}>
+      {children}
+    </GroupsContext.Provider>
+  )
 }
 
 export const useGroups = (): GroupsContextType => {

@@ -6,6 +6,7 @@ import {
   mihomoChangeProxy,
   mihomoCloseAllConnections,
   mihomoGroupDetail,
+  mihomoGroupsSnapshot,
   mihomoProxyDelay
 } from '@renderer/utils/ipc'
 import { CgDetailsLess, CgDetailsMore } from 'react-icons/cg'
@@ -37,6 +38,7 @@ const EMPTY_GROUPS: IMihomoMixedGroupSummary[] = []
 const PROXY_GROUP_ROW_HEIGHT = 64
 const PROXY_ITEM_ROW_HEIGHT = 80
 const DETAIL_PREFETCH_COUNT = 2
+const ACTIVE_REFRESH_INTERVAL = 5000
 const proxyGroupIconCache = new Map<string, string>()
 const pendingProxyGroupIconRequests = new Set<string>()
 
@@ -565,7 +567,7 @@ const Proxies: React.FC = () => {
   const { t } = useTranslation()
   const { controledMihomoConfig } = useControledMihomoConfig()
   const { mode = 'rule' } = controledMihomoConfig || {}
-  const { groups, mutate } = useGroups()
+  const { groups, mutate, updateGroups } = useGroups()
   const proxyGroups = groups ?? EMPTY_GROUPS
   const groupsReady = groups !== undefined
   const groupNamesKey = useMemo(
@@ -594,16 +596,22 @@ const Proxies: React.FC = () => {
     {}
   )
   const groupDetailsRef = useRef(groupDetails)
+  const proxyGroupsRef = useRef(proxyGroups)
   const groupDetailRequestsRef = useRef(new Map<string, Promise<IMihomoMixedGroup>>())
   const groupDetailRequestVersionsRef = useRef(new Map<string, number>())
   const groupDetailRequestVersionRef = useRef(0)
   const groupDetailGenerationRef = useRef(0)
   const staleGroupDetailsRef = useRef(new Set<string>())
+  const activeRefreshRunningRef = useRef(false)
   const [groupDetailRefreshTick, setGroupDetailRefreshTick] = useState(0)
 
   useEffect(() => {
     groupDetailsRef.current = groupDetails
   }, [groupDetails])
+
+  useEffect(() => {
+    proxyGroupsRef.current = proxyGroups
+  }, [proxyGroups])
 
   useEffect(() => {
     isOpenRef.current = isOpen
@@ -645,12 +653,13 @@ const Proxies: React.FC = () => {
   const ensureGroupDetail = useCallback(
     async (groupName: string, force = false): Promise<IMihomoMixedGroup> => {
       const cachedDetail = groupDetailsRef.current[groupName]
-      if (cachedDetail && !force) return cachedDetail
+      const shouldForce = force || staleGroupDetailsRef.current.has(groupName)
+      if (cachedDetail && !shouldForce) return cachedDetail
 
       const pendingRequest = groupDetailRequestsRef.current.get(groupName)
-      if (pendingRequest && !force) return pendingRequest
+      if (pendingRequest && !shouldForce) return pendingRequest
 
-      const request = mihomoGroupDetail(groupName, force)
+      const request = mihomoGroupDetail(groupName, shouldForce)
       groupDetailRequestsRef.current.set(groupName, request)
       const requestVersion = groupDetailRequestVersionRef.current + 1
       groupDetailRequestVersionRef.current = requestVersion
@@ -718,6 +727,95 @@ const Proxies: React.FC = () => {
       window.electron.ipcRenderer.removeListener('groupsUpdated', handler)
     }
   }, [])
+
+  const refreshActiveGroups = useCallback(async (): Promise<void> => {
+    if (activeRefreshRunningRef.current || mode === 'direct') return
+
+    const currentGroups = proxyGroupsRef.current
+    if (currentGroups.length === 0) return
+
+    activeRefreshRunningRef.current = true
+    const openGroupNames = currentGroups
+      .filter((group) => Boolean(isOpenRef.current[group.name]))
+      .map((group) => group.name)
+    const generation = groupDetailGenerationRef.current
+    const detailRequestVersions = new Map<string, number>()
+
+    for (const groupName of openGroupNames) {
+      const requestVersion = groupDetailRequestVersionRef.current + 1
+      groupDetailRequestVersionRef.current = requestVersion
+      groupDetailRequestVersionsRef.current.set(groupName, requestVersion)
+      groupDetailRequestsRef.current.delete(groupName)
+      detailRequestVersions.set(groupName, requestVersion)
+    }
+
+    try {
+      const snapshot = await mihomoGroupsSnapshot(openGroupNames, true)
+      if (generation !== groupDetailGenerationRef.current) return
+
+      updateGroups(snapshot.summaries)
+
+      const detailEntries = Object.entries(snapshot.details)
+      const detailNames = new Set(detailEntries.map(([groupName]) => groupName))
+      for (const groupName of Object.keys(groupDetailsRef.current)) {
+        if (!detailNames.has(groupName)) {
+          staleGroupDetailsRef.current.add(groupName)
+        }
+      }
+
+      if (detailEntries.length === 0) return
+
+      startTransition(() => {
+        setGroupDetails((prev) => {
+          if (generation !== groupDetailGenerationRef.current) return prev
+
+          let changed = false
+          const next = { ...prev }
+
+          for (const [groupName, detail] of detailEntries) {
+            if (
+              groupDetailRequestVersionsRef.current.get(groupName) !==
+              detailRequestVersions.get(groupName)
+            ) {
+              continue
+            }
+
+            staleGroupDetailsRef.current.delete(groupName)
+            const previousDetail = prev[groupName]
+            const mergedDetail = mergeGroupDetail(previousDetail, detail)
+            if (previousDetail !== mergedDetail) {
+              next[groupName] = mergedDetail
+              changed = true
+            }
+          }
+
+          return changed ? next : prev
+        })
+      })
+    } catch (error) {
+      console.error('Failed to refresh proxy groups:', error)
+    } finally {
+      activeRefreshRunningRef.current = false
+    }
+  }, [mode, updateGroups])
+
+  useEffect(() => {
+    if (mode === 'direct') return
+
+    const refreshIfVisible = (): void => {
+      if (document.visibilityState === 'hidden') return
+      void refreshActiveGroups()
+    }
+
+    refreshIfVisible()
+    const interval = window.setInterval(refreshIfVisible, ACTIVE_REFRESH_INTERVAL)
+    document.addEventListener('visibilitychange', refreshIfVisible)
+
+    return (): void => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', refreshIfVisible)
+    }
+  }, [mode, refreshActiveGroups])
 
   useEffect(() => {
     if (!groupsReady || proxyGroups.length === 0) return

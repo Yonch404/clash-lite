@@ -173,6 +173,11 @@ type IMihomoMixedGroupSummary = Omit<IMihomoGroup, 'all'> & {
   allCount: number
 }
 
+interface IMihomoGroupsSnapshot {
+  summaries: IMihomoMixedGroupSummary[]
+  details: Record<string, IMihomoMixedGroup>
+}
+
 interface IMihomoProxyProviders {
   providers: Record<string, IMihomoProxyProvider>
 }
