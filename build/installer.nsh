@@ -10,12 +10,27 @@ Var ClashLiteInstallDir
 Var ClashLiteInstallParentDir
 Var ClashLiteInstallParentName
 Var ClashLiteCleanupScript
+Var ClashLiteIsUpdated
 
 !macro customUnWelcomePage
   PageEx un.custom
     PageCallbacks un.ClashLiteUninstallOptionsPageCreate un.ClashLiteUninstallOptionsPageLeave
   PageExEnd
 !macroend
+
+!macro customUnInit
+  Call un.ClashLiteDetectUpdated
+!macroend
+
+Function un.ClashLiteDetectUpdated
+  StrCpy $ClashLiteIsUpdated "0"
+  ${GetParameters} $0
+  ClearErrors
+  ${GetOptions} $0 "--updated" $1
+  ${IfNot} ${Errors}
+    StrCpy $ClashLiteIsUpdated "1"
+  ${EndIf}
+FunctionEnd
 
 Function un.ClashLiteUninstallOptionsPageCreate
   nsDialogs::Create 1018
@@ -81,7 +96,7 @@ Function un.ClashLiteScheduleInstallDirCleanup
 FunctionEnd
 
 Function un.onGUIEnd
-  ${IfNot} ${isUpdated}
+  ${If} $ClashLiteIsUpdated != "1"
     SetOutPath "$TEMP"
     RMDir /r "$INSTDIR"
     RMDir "$INSTDIR"
@@ -90,7 +105,7 @@ Function un.onGUIEnd
 FunctionEnd
 
 !macro customRemoveFiles
-  ${If} ${isUpdated}
+  ${If} $ClashLiteIsUpdated == "1"
     CreateDirectory "$PLUGINSDIR\old-install"
 
     Push ""
@@ -113,7 +128,7 @@ FunctionEnd
   RMDir "$INSTDIR"
 
   ${If} ${Silent}
-    ${IfNot} ${isUpdated}
+    ${If} $ClashLiteIsUpdated != "1"
       Call un.ClashLiteScheduleInstallDirCleanup
     ${EndIf}
   ${EndIf}
