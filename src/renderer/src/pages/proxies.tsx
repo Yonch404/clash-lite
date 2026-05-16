@@ -21,7 +21,8 @@ import {
   useRef,
   useState,
   useCallback,
-  type CSSProperties
+  type CSSProperties,
+  type ForwardedRef
 } from 'react'
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso'
 import type { Components, ContextProp, ScrollerProps } from 'react-virtuoso'
@@ -34,7 +35,8 @@ import { useTranslation } from 'react-i18next'
 const GROUP_EXPAND_STATE_KEY = 'proxy_group_expand_state'
 const EMPTY_GROUPS: IMihomoMixedGroupSummary[] = []
 const PROXY_GROUP_ROW_HEIGHT = 64
-const PROXY_ITEM_ROW_HEIGHT = 80
+const PROXY_SIMPLE_ITEM_ROW_HEIGHT = 56
+const PROXY_FULL_ITEM_ROW_HEIGHT = 80
 const DETAIL_PREFETCH_COUNT = 2
 const ACTIVE_REFRESH_INTERVAL = 5000
 const proxyGroupIconCache = new Map<string, string>()
@@ -42,6 +44,7 @@ const pendingProxyGroupIconRequests = new Set<string>()
 
 interface ProxiesVirtuosoContext {
   hideScrollbar: boolean
+  setScrollerElement: (element: HTMLDivElement | null) => void
 }
 
 type BooleanMap = Record<string, boolean>
@@ -66,6 +69,7 @@ interface ProxyRowProps {
   proxies: (IMihomoProxy | IMihomoGroup)[]
   groupName: string
   groupTestUrl?: string
+  rowIndex: number
   selectedProxyName: string
   proxyDisplayMode: 'simple' | 'full'
   proxyCols: IAppConfig['proxyCols']
@@ -91,20 +95,43 @@ type ProxyListRow =
       type: 'proxy-row'
       key: string
       groupIndex: number
+      rowIndex: number
       proxies: (IMihomoProxy | IMihomoGroup)[]
       selectedProxyName: string
     }
+
+function setForwardedScrollerRef(
+  ref: ForwardedRef<HTMLDivElement>,
+  element: HTMLDivElement | null
+): void {
+  if (typeof ref === 'function') {
+    ref(element)
+    return
+  }
+
+  if (ref) {
+    ;(ref as { current: HTMLDivElement | null }).current = element
+  }
+}
 
 const ProxiesScroller = forwardRef<
   HTMLDivElement,
   ScrollerProps & ContextProp<ProxiesVirtuosoContext>
 >(({ style, context, ...props }, ref) => {
+  const setScrollerRef = useCallback(
+    (element: HTMLDivElement | null): void => {
+      context.setScrollerElement(element)
+      setForwardedScrollerRef(ref, element)
+    },
+    [context, ref]
+  )
+
   const scrollerStyle = {
     ...style,
     overflowY: context.hideScrollbar ? 'hidden' : style?.overflowY
   } as CSSProperties
 
-  return <div {...props} ref={ref} style={scrollerStyle} />
+  return <div {...props} ref={setScrollerRef} style={scrollerStyle} />
 })
 
 ProxiesScroller.displayName = 'ProxiesScroller'
@@ -384,6 +411,59 @@ function scheduleIdleTask(callback: () => void): () => void {
   return () => globalThis.clearTimeout(handle)
 }
 
+function nextAnimationFrame(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => resolve())
+  })
+}
+
+function findProxyGroupElement(
+  scroller: HTMLDivElement,
+  groupName: string
+): HTMLElement | undefined {
+  for (const element of scroller.querySelectorAll<HTMLElement>('[data-proxy-group-name]')) {
+    if (element.dataset.proxyGroupName === groupName) return element
+  }
+
+  return undefined
+}
+
+function findProxyRowElement(
+  scroller: HTMLDivElement,
+  groupName: string,
+  rowIndex: number
+): HTMLElement | undefined {
+  for (const element of scroller.querySelectorAll<HTMLElement>('[data-proxy-row-group]')) {
+    if (
+      element.dataset.proxyRowGroup === groupName &&
+      element.dataset.proxyRowIndex === String(rowIndex)
+    ) {
+      return element
+    }
+  }
+
+  return undefined
+}
+
+async function waitForProxyRowElement(
+  scroller: HTMLDivElement,
+  groupName: string,
+  rowIndex: number
+): Promise<HTMLElement | undefined> {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const element = findProxyRowElement(scroller, groupName, rowIndex)
+    if (element) return element
+
+    await nextAnimationFrame()
+  }
+
+  return undefined
+}
+
+function clampScrollTop(scrollTop: number, scroller: HTMLDivElement): number {
+  return Math.max(0, Math.min(scrollTop, scroller.scrollHeight - scroller.clientHeight))
+}
+
 const ProxyGroupHeader = memo(function ProxyGroupHeader(props: ProxyGroupHeaderProps) {
   const {
     group,
@@ -401,7 +481,7 @@ const ProxyGroupHeader = memo(function ProxyGroupHeader(props: ProxyGroupHeaderP
   } = props
 
   return (
-    <div className="w-full pt-2 px-2">
+    <div className="w-full pt-2 px-2" data-proxy-group-name={group.name}>
       <Card
         as="div"
         isPressable
@@ -487,6 +567,7 @@ const ProxyRow = memo(
       proxies,
       groupName,
       groupTestUrl,
+      rowIndex,
       selectedProxyName,
       proxyDisplayMode,
       proxyCols,
@@ -499,6 +580,8 @@ const ProxyRow = memo(
     return (
       <div
         style={proxyGridStyle}
+        data-proxy-row-group={groupName}
+        data-proxy-row-index={rowIndex}
         className={`grid ${proxyCols === 'auto' ? 'sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5' : ''} gap-2 pt-2 mx-2`}
       >
         {proxies.map((proxy) => {
@@ -522,6 +605,7 @@ const ProxyRow = memo(
     if (
       prevProps.groupName !== nextProps.groupName ||
       prevProps.groupTestUrl !== nextProps.groupTestUrl ||
+      prevProps.rowIndex !== nextProps.rowIndex ||
       prevProps.proxyDisplayMode !== nextProps.proxyDisplayMode ||
       prevProps.proxyCols !== nextProps.proxyCols ||
       prevProps.proxyGridStyle !== nextProps.proxyGridStyle ||
@@ -595,6 +679,8 @@ const Proxies: React.FC = () => {
     if (proxyCols === 'auto') return undefined
     return { gridTemplateColumns: `repeat(${proxyCols}, minmax(0, 1fr))` }
   }, [proxyCols])
+  const proxyItemRowHeight =
+    proxyDisplayMode === 'full' ? PROXY_FULL_ITEM_ROW_HEIGHT : PROXY_SIMPLE_ITEM_ROW_HEIGHT
 
   const [cols, setCols] = useState(1)
   const { virtuosoRef, isOpen, setIsOpen } = useProxyState(proxyGroups)
@@ -615,6 +701,7 @@ const Proxies: React.FC = () => {
   const activeRefreshRunningRef = useRef(false)
   const pendingProxyDelaysRef = useRef(new Map<string, Map<string, number>>())
   const proxyDelayFlushTimerRef = useRef<number | null>(null)
+  const scrollerRef = useRef<HTMLDivElement | null>(null)
   const [groupDetailRefreshTick, setGroupDetailRefreshTick] = useState(0)
 
   useEffect(() => {
@@ -1021,6 +1108,7 @@ const Proxies: React.FC = () => {
             type: 'proxy-row',
             key: `proxy-row:${group.name}:${rowIndex}`,
             groupIndex,
+            rowIndex,
             proxies: rowProxies,
             selectedProxyName: getRowSelectedProxyName(rowProxies, currentProxyName)
           })
@@ -1056,9 +1144,12 @@ const Proxies: React.FC = () => {
   const hasProxyRows = totalProxyRows > 0
   const [virtuosoMeasured, setVirtuosoMeasured] = useState(false)
   const hideVirtuosoScrollbar = !hasProxyRows && !virtuosoMeasured
+  const setScrollerElement = useCallback((element: HTMLDivElement | null): void => {
+    scrollerRef.current = element
+  }, [])
   const virtuosoContext = useMemo(
-    () => ({ hideScrollbar: hideVirtuosoScrollbar }),
-    [hideVirtuosoScrollbar]
+    () => ({ hideScrollbar: hideVirtuosoScrollbar, setScrollerElement }),
+    [hideVirtuosoScrollbar, setScrollerElement]
   )
 
   useEffect(() => {
@@ -1078,6 +1169,40 @@ const Proxies: React.FC = () => {
   const computeProxyItemKey = useCallback((_index: number, row: ProxyListRow): string => {
     return row.key
   }, [])
+
+  const locateProxyRow = useCallback(
+    async (groupName: string, proxyRowIndex: number): Promise<boolean> => {
+      await nextAnimationFrame()
+      await nextAnimationFrame()
+
+      const scroller = scrollerRef.current
+      if (!scroller) return false
+
+      const groupElement = findProxyGroupElement(scroller, groupName)
+      if (!groupElement) return false
+
+      const proxyRowElement = await waitForProxyRowElement(scroller, groupName, 0)
+      if (!proxyRowElement) return false
+
+      const measuredProxyRowHeight = proxyRowElement.getBoundingClientRect().height
+      const groupRect = groupElement.getBoundingClientRect()
+      const scrollerRect = scroller.getBoundingClientRect()
+      const groupTop = groupRect.top - scrollerRect.top + scroller.scrollTop
+      const targetRowTop = groupTop + groupRect.height + measuredProxyRowHeight * proxyRowIndex
+      const targetScrollTop = clampScrollTop(
+        targetRowTop - scroller.clientHeight * 0.42 + measuredProxyRowHeight / 2,
+        scroller
+      )
+
+      scroller.scrollTo({
+        top: targetScrollTop,
+        behavior: 'smooth'
+      })
+
+      return true
+    },
+    []
+  )
 
   const onChangeProxy = useCallback(
     async (group: string, proxy: string): Promise<void> => {
@@ -1155,14 +1280,27 @@ const Proxies: React.FC = () => {
       const proxyIndex = detail.all.findIndex((proxy) => proxy.name === detail.now)
       if (proxyIndex < 0) return
 
-      requestAnimationFrame(() => {
-        virtuosoRef.current?.scrollToIndex({
-          index: groupRowOffsets[index] + Math.floor(proxyIndex / cols),
-          align: 'start'
-        })
+      const proxyRowIndex = Math.floor(proxyIndex / cols)
+      const located = await locateProxyRow(groupName, proxyRowIndex)
+      if (located) return
+
+      virtuosoRef.current?.scrollToIndex({
+        index: groupRowOffsets[index] + proxyRowIndex,
+        align: 'center',
+        behavior: 'smooth',
+        offset: proxyItemRowHeight / 2
       })
     },
-    [cols, ensureGroupDetail, groupIndexByName, groupRowOffsets, openGroup, virtuosoRef]
+    [
+      cols,
+      ensureGroupDetail,
+      groupIndexByName,
+      groupRowOffsets,
+      locateProxyRow,
+      openGroup,
+      proxyItemRowHeight,
+      virtuosoRef
+    ]
   )
 
   const onGroupDelay = useCallback(
@@ -1284,6 +1422,7 @@ const Proxies: React.FC = () => {
           proxies={row.proxies}
           groupName={group.name}
           groupTestUrl={group.testUrl}
+          rowIndex={row.rowIndex}
           selectedProxyName={row.selectedProxyName}
           proxyDisplayMode={proxyDisplayMode}
           proxyCols={proxyCols}
@@ -1353,7 +1492,7 @@ const Proxies: React.FC = () => {
           <Virtuoso
             ref={virtuosoRef}
             data={rows}
-            defaultItemHeight={hasProxyRows ? PROXY_ITEM_ROW_HEIGHT : PROXY_GROUP_ROW_HEIGHT}
+            defaultItemHeight={hasProxyRows ? proxyItemRowHeight : PROXY_GROUP_ROW_HEIGHT}
             increaseViewportBy={{ top: 150, bottom: 150 }}
             overscan={200}
             components={virtuosoComponents}
