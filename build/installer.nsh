@@ -42,12 +42,15 @@ Function un.ClashLiteScheduleInstallDirCleanup
   StrCpy $ClashLiteInstallDir "$INSTDIR"
   ${GetParent} "$ClashLiteInstallDir" $ClashLiteInstallParentDir
   ${GetFileName} "$ClashLiteInstallParentDir" $ClashLiteInstallParentName
+  SetOutPath "$TEMP"
 
   ${If} $ClashLiteInstallParentName == "${APP_FILENAME}"
   ${OrIf} $ClashLiteInstallParentName == "${PRODUCT_FILENAME}"
-    ExecShell "open" "$SYSDIR\cmd.exe" '/C "timeout /T 2 /NOBREAK >NUL & for /L %i in (1,1,20) do @if exist "$ClashLiteInstallDir" (rmdir /S /Q "$ClashLiteInstallDir" 2>NUL & timeout /T 1 /NOBREAK >NUL) & rmdir "$ClashLiteInstallParentDir" 2>NUL"' SW_HIDE
+  ${OrIf} $ClashLiteInstallParentName == "Clash Lite"
+  ${OrIf} $ClashLiteInstallParentName == "clash-lite"
+    ExecShell "open" "$SYSDIR\cmd.exe" '/D /C "timeout /T 2 /NOBREAK >NUL & for /L %i in (1,1,20) do @if exist "$ClashLiteInstallDir" (rmdir /S /Q "$ClashLiteInstallDir" 2>NUL & timeout /T 1 /NOBREAK >NUL) & rmdir "$ClashLiteInstallParentDir" 2>NUL"' SW_HIDE
   ${Else}
-    ExecShell "open" "$SYSDIR\cmd.exe" '/C "timeout /T 2 /NOBREAK >NUL & for /L %i in (1,1,20) do @if exist "$ClashLiteInstallDir" (rmdir /S /Q "$ClashLiteInstallDir" 2>NUL & timeout /T 1 /NOBREAK >NUL)"' SW_HIDE
+    ExecShell "open" "$SYSDIR\cmd.exe" '/D /C "timeout /T 2 /NOBREAK >NUL & for /L %i in (1,1,20) do @if exist "$ClashLiteInstallDir" (rmdir /S /Q "$ClashLiteInstallDir" 2>NUL & timeout /T 1 /NOBREAK >NUL)"' SW_HIDE
   ${EndIf}
 FunctionEnd
 
