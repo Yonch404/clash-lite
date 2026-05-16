@@ -1,6 +1,6 @@
 {
   "name": "clash-lite",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "description": "Clash Lite",
   "type": "module",
   "main": "./out/main/index.js",
