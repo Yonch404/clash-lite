@@ -3,12 +3,13 @@ import * as https from 'https'
 import * as net from 'net'
 import * as tls from 'tls'
 import * as zlib from 'zlib'
+import { performance } from 'perf_hooks'
 import { promisify } from 'util'
 import { URL } from 'url'
 import { getChromeCaBundle } from './certificate'
 
 export interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD'
   headers?: Record<string, string>
   body?: string | Buffer
   proxy?:
@@ -41,6 +42,13 @@ interface RawResponse {
   url: string
 }
 
+interface LatencyResponse {
+  status: number
+  headers: Record<string, string>
+  latency: number
+  url: string
+}
+
 type HttpProxyOptions = {
   protocol: 'http'
   host: string
@@ -52,6 +60,19 @@ const inflate = promisify(zlib.inflate)
 const brotliDecompress = promisify(zlib.brotliDecompress)
 const activeRequests = new Set<http.ClientRequest>()
 const activeSockets = new Set<net.Socket>()
+const latencyHttpAgent = new http.Agent({ keepAlive: true, maxSockets: 8, maxFreeSockets: 4 })
+const latencyHttpsAgent = new https.Agent({ keepAlive: true, maxSockets: 8, maxFreeSockets: 4 })
+const latencyWarmupAt = new Map<string, number>()
+const LATENCY_WARMUP_TTL_MS = 2 * 60 * 1000
+
+export interface LatencyMeasureOptions {
+  timeout?: number
+  samples?: number
+  warmup?: boolean
+  proxy?: RequestOptions['proxy']
+  followRedirect?: boolean
+  maxRedirects?: number
+}
 
 function trackRequest(req: http.ClientRequest): void {
   if (activeRequests.has(req)) return
@@ -92,6 +113,8 @@ export function abortPendingRequests(): void {
 
   activeRequests.clear()
   activeSockets.clear()
+  latencyHttpAgent.destroy()
+  latencyHttpsAgent.destroy()
 }
 
 /**
@@ -103,6 +126,78 @@ export async function request<T = unknown>(
   options: RequestOptions = {}
 ): Promise<Response<T>> {
   return requestWithRedirects<T>(url, options, 0)
+}
+
+export async function measureNetworkLatency(
+  url: string,
+  options: LatencyMeasureOptions = {}
+): Promise<number | null> {
+  const {
+    timeout = 5000,
+    samples = 2,
+    warmup = true,
+    followRedirect = true,
+    maxRedirects = 3,
+    proxy
+  } = options
+  const normalizedSamples = Math.max(1, Math.min(Math.floor(samples), 5))
+
+  try {
+    if (warmup && shouldWarmupLatencyTarget(url)) {
+      try {
+        await latencyRequestWithRedirects(url, { timeout, proxy, followRedirect, maxRedirects }, 0)
+        latencyWarmupAt.set(url, Date.now())
+      } catch {
+        // The measured samples below decide the visible result.
+      }
+    }
+
+    const results: number[] = []
+    for (let i = 0; i < normalizedSamples; i += 1) {
+      const result = await latencyRequestWithRedirects(
+        url,
+        { timeout, proxy, followRedirect, maxRedirects },
+        0
+      )
+      results.push(result.latency)
+    }
+
+    if (results.length === 0) return null
+    latencyWarmupAt.set(url, Date.now())
+    results.sort((a, b) => a - b)
+    return results[Math.floor((results.length - 1) / 2)]
+  } catch {
+    return null
+  }
+}
+
+function shouldWarmupLatencyTarget(url: string): boolean {
+  const warmupAt = latencyWarmupAt.get(url)
+  return !warmupAt || Date.now() - warmupAt > LATENCY_WARMUP_TTL_MS
+}
+
+async function latencyRequestWithRedirects(
+  url: string,
+  options: Required<Pick<LatencyMeasureOptions, 'timeout' | 'followRedirect' | 'maxRedirects'>> &
+    Pick<LatencyMeasureOptions, 'proxy'>,
+  redirectCount: number
+): Promise<LatencyResponse> {
+  const result = await performLatencyRequest(url, options)
+  const location = result.headers.location
+
+  if (options.followRedirect && isRedirect(result.status) && location) {
+    if (redirectCount >= options.maxRedirects) {
+      throw new Error(`Too many redirects (>${options.maxRedirects})`)
+    }
+
+    return latencyRequestWithRedirects(
+      new URL(location, url).toString(),
+      options,
+      redirectCount + 1
+    )
+  }
+
+  return result
 }
 
 async function requestWithRedirects<T>(
@@ -178,6 +273,8 @@ async function performRequest(url: string, options: RequiredMethodOptions): Prom
 }
 
 type RequiredMethodOptions = RequestOptions & { method: NonNullable<RequestOptions['method']> }
+type RequiredLatencyOptions = Required<Pick<LatencyMeasureOptions, 'timeout'>> &
+  Pick<LatencyMeasureOptions, 'proxy'>
 
 function normalizeProxy(proxy: RequestOptions['proxy']): HttpProxyOptions | undefined {
   if (!proxy) return undefined
@@ -185,6 +282,30 @@ function normalizeProxy(proxy: RequestOptions['proxy']): HttpProxyOptions | unde
     throw new Error(`Unsupported proxy protocol for custom certificate store: ${proxy.protocol}`)
   }
   return { protocol: 'http', host: proxy.host, port: proxy.port }
+}
+
+async function performLatencyRequest(
+  url: string,
+  options: RequiredLatencyOptions
+): Promise<LatencyResponse> {
+  const target = new URL(url)
+  if (target.protocol !== 'http:' && target.protocol !== 'https:') {
+    throw new Error(`Unsupported request protocol: ${target.protocol}`)
+  }
+
+  const proxy = normalizeProxy(options.proxy)
+  if (target.protocol === 'https:') {
+    const ca = await getChromeCaBundle()
+    if (proxy) {
+      return performLatencyHttpsViaHttpProxy(target, options, proxy, ca)
+    }
+    return performDirectHttpsLatency(target, options, ca)
+  }
+
+  if (proxy) {
+    return performLatencyHttpViaHttpProxy(target, options, proxy)
+  }
+  return performDirectHttpLatency(target, options)
 }
 
 function performDirectHttp(target: URL, options: RequiredMethodOptions): Promise<RawResponse> {
@@ -198,6 +319,25 @@ function performDirectHttp(target: URL, options: RequiredMethodOptions): Promise
   }
 
   return sendRequest(target.toString(), options, (onResponse) =>
+    http.request(requestOptions, onResponse)
+  )
+}
+
+function performDirectHttpLatency(
+  target: URL,
+  options: RequiredLatencyOptions
+): Promise<LatencyResponse> {
+  const requestOptions: http.RequestOptions = {
+    protocol: 'http:',
+    hostname: target.hostname,
+    port: getPort(target),
+    method: 'HEAD',
+    path: getRequestPath(target),
+    headers: buildRequestHeaders(target),
+    agent: latencyHttpAgent
+  }
+
+  return sendLatencyRequest(target.toString(), options, (onResponse) =>
     http.request(requestOptions, onResponse)
   )
 }
@@ -224,6 +364,29 @@ function performDirectHttps(
   )
 }
 
+function performDirectHttpsLatency(
+  target: URL,
+  options: RequiredLatencyOptions,
+  ca: Buffer
+): Promise<LatencyResponse> {
+  const requestOptions: https.RequestOptions = {
+    protocol: 'https:',
+    hostname: target.hostname,
+    port: getPort(target),
+    method: 'HEAD',
+    path: getRequestPath(target),
+    headers: buildRequestHeaders(target),
+    ca,
+    rejectUnauthorized: true,
+    servername: getServername(target),
+    agent: latencyHttpsAgent
+  }
+
+  return sendLatencyRequest(target.toString(), options, (onResponse) =>
+    https.request(requestOptions, onResponse)
+  )
+}
+
 function performHttpViaHttpProxy(
   target: URL,
   options: RequiredMethodOptions,
@@ -239,6 +402,26 @@ function performHttpViaHttpProxy(
   }
 
   return sendRequest(target.toString(), options, (onResponse) =>
+    http.request(requestOptions, onResponse)
+  )
+}
+
+function performLatencyHttpViaHttpProxy(
+  target: URL,
+  options: RequiredLatencyOptions,
+  proxy: HttpProxyOptions
+): Promise<LatencyResponse> {
+  const requestOptions: http.RequestOptions = {
+    protocol: 'http:',
+    hostname: proxy.host,
+    port: proxy.port,
+    method: 'HEAD',
+    path: target.toString(),
+    headers: buildRequestHeaders(target),
+    agent: latencyHttpAgent
+  }
+
+  return sendLatencyRequest(target.toString(), options, (onResponse) =>
     http.request(requestOptions, onResponse)
   )
 }
@@ -263,6 +446,34 @@ async function performHttpsViaHttpProxy(
 
   try {
     return await sendRequest(target.toString(), options, (onResponse) =>
+      https.request(requestOptions, onResponse)
+    )
+  } catch (error) {
+    socket.destroy()
+    throw error
+  }
+}
+
+async function performLatencyHttpsViaHttpProxy(
+  target: URL,
+  options: RequiredLatencyOptions,
+  proxy: HttpProxyOptions,
+  ca: Buffer
+): Promise<LatencyResponse> {
+  const socket = await createProxyTlsSocket(target, proxy, ca, options.timeout)
+  const requestOptions: https.RequestOptions = {
+    protocol: 'https:',
+    hostname: target.hostname,
+    port: getPort(target),
+    method: 'HEAD',
+    path: getRequestPath(target),
+    headers: buildRequestHeaders(target),
+    agent: false,
+    createConnection: () => socket
+  }
+
+  try {
+    return await sendLatencyRequest(target.toString(), options, (onResponse) =>
       https.request(requestOptions, onResponse)
     )
   } catch (error) {
@@ -402,9 +613,6 @@ function sendRequest(
           })
       })
       trackRequest(req)
-      req.once('socket', (socket) => {
-        socket.once('error', (error) => fail(error))
-      })
     } catch (error) {
       fail(error instanceof Error ? error : new Error(String(error)))
       return
@@ -421,6 +629,62 @@ function sendRequest(
     if (options.body) {
       req.write(options.body)
     }
+    req.end()
+  })
+}
+
+function sendLatencyRequest(
+  url: string,
+  options: RequiredLatencyOptions,
+  createRequest: (onResponse: (res: http.IncomingMessage) => void) => http.ClientRequest
+): Promise<LatencyResponse> {
+  const startedAt = performance.now()
+  const timeout = options.timeout
+
+  return new Promise((resolve, reject) => {
+    let settled = false
+    let req: http.ClientRequest | undefined
+    let timeoutId: NodeJS.Timeout | undefined
+
+    const cleanup = (): void => {
+      if (timeoutId) clearTimeout(timeoutId)
+      if (req) activeRequests.delete(req)
+    }
+    const fail = (error: Error): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      req?.destroy()
+      reject(error)
+    }
+    const succeed = (res: http.IncomingMessage): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      res.resume()
+      resolve({
+        status: res.statusCode ?? 0,
+        headers: normalizeResponseHeaders(res.headers),
+        latency: Math.max(0, Math.round(performance.now() - startedAt)),
+        url
+      })
+    }
+
+    try {
+      req = createRequest(succeed)
+      trackRequest(req)
+    } catch (error) {
+      fail(error instanceof Error ? error : new Error(String(error)))
+      return
+    }
+
+    if (timeout > 0) {
+      timeoutId = setTimeout(() => {
+        fail(new Error(`Request timeout after ${timeout}ms`))
+      }, timeout)
+    }
+
+    req.once('error', (error) => fail(error))
     req.end()
   })
 }

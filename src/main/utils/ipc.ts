@@ -61,7 +61,7 @@ import { applyTheme } from '../resolve/theme'
 import { startMonitor } from '../resolve/trafficMonitor'
 import { addProfileUpdater, removeProfileUpdater } from '../core/profileUpdater'
 import { getImageDataURL } from './image'
-import { get as httpGet } from './chromeRequest'
+import { get as httpGet, measureNetworkLatency } from './chromeRequest'
 import { logDir } from './dirs'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -100,13 +100,7 @@ async function fetchIPInfo(url: string): Promise<unknown> {
 }
 
 async function measureLatency(url: string): Promise<number | null> {
-  try {
-    const t0 = Date.now()
-    await httpGet<unknown>(url, { timeout: 5000, responseType: 'text' })
-    return Date.now() - t0
-  } catch {
-    return null
-  }
+  return measureNetworkLatency(url, { timeout: 5000, samples: 2, warmup: true })
 }
 
 async function changeLanguage(lng: string): Promise<void> {

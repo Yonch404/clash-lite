@@ -1,15 +1,7 @@
 import BasePage from '@renderer/components/base/base-page'
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Button, Select, SelectItem, Chip, Tooltip, Input } from '@heroui/react'
-import {
-  IoRefresh,
-  IoCopyOutline,
-  IoCheckmark,
-  IoEyeOutline,
-  IoEyeOffOutline,
-  IoAdd,
-  IoClose
-} from 'react-icons/io5'
+import { IoRefresh, IoCheckmark, IoAdd, IoClose } from 'react-icons/io5'
 import { IoMdGlobe, IoMdPulse } from 'react-icons/io'
 import { useTranslation } from 'react-i18next'
 import { fetchIPInfo, measureLatency } from '@renderer/utils/ipc'
@@ -214,8 +206,7 @@ const IPPage: React.FC = () => {
   const [ipInfo, setIpInfo] = useState<IPInfo | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
-  const [hidden, setHidden] = useState(false)
+  const [copyTooltipOpen, setCopyTooltipOpen] = useState(false)
   const [isAddingLatencyTarget, setIsAddingLatencyTarget] = useState(false)
   const [customLatencyName, setCustomLatencyName] = useState('')
   const [customLatencyUrl, setCustomLatencyUrl] = useState('')
@@ -225,6 +216,7 @@ const IPPage: React.FC = () => {
   // latency state: map from url -> result
   const [latencyResults, setLatencyResults] = useState<Record<string, LatencyResult>>({})
   const [testingLatency, setTestingLatency] = useState(false)
+  const copyTooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const appConfigLoaded = appConfig !== undefined
 
   const customLatencyTargets = useMemo(
@@ -324,24 +316,28 @@ const IPPage: React.FC = () => {
 
   const testAllLatencies = useCallback(async () => {
     setTestingLatency(true)
-    // mark all as pending first
     setLatencyResults(
       Object.fromEntries(
-        latencyTargets.map((t) => [t.url, { latency: null, status: 'pending' as LatencyStatus }])
+        latencyTargets.map((target) => [
+          target.url,
+          { latency: null, status: 'pending' as LatencyStatus }
+        ])
       )
     )
     await Promise.all(
       latencyTargets.map(async (target) => {
         try {
           const latency = await measureLatency(target.url)
+          const result: LatencyResult = { latency, status: latency !== null ? 'success' : 'error' }
           setLatencyResults((prev) => ({
             ...prev,
-            [target.url]: { latency, status: latency !== null ? 'success' : 'error' }
+            [target.url]: result
           }))
         } catch {
+          const result: LatencyResult = { latency: null, status: 'error' }
           setLatencyResults((prev) => ({
             ...prev,
-            [target.url]: { latency: null, status: 'error' }
+            [target.url]: result
           }))
         }
       })
@@ -389,11 +385,21 @@ const IPPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    return () => {
+      if (copyTooltipTimerRef.current) clearTimeout(copyTooltipTimerRef.current)
+    }
+  }, [])
+
   const handleCopy = useCallback(() => {
     if (!ipInfo?.ip) return
     navigator.clipboard.writeText(ipInfo.ip)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    if (copyTooltipTimerRef.current) clearTimeout(copyTooltipTimerRef.current)
+    setCopyTooltipOpen(true)
+    copyTooltipTimerRef.current = setTimeout(() => {
+      setCopyTooltipOpen(false)
+      copyTooltipTimerRef.current = null
+    }, 1600)
   }, [ipInfo?.ip])
 
   return (
@@ -456,30 +462,19 @@ const IPPage: React.FC = () => {
           {/* IP 信息 */}
           {ipInfo && (
             <div className="flex flex-col gap-2.5">
-              {/* IP 地址高亮行（负 margin 贴边） */}
-              <div className="-mx-1 -mt-1 mb-1 flex items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/8 px-2.5 py-2">
-                <span className="shrink-0 text-[13px] text-foreground/60">
+              <div className="flex items-center justify-between gap-3">
+                <span className="shrink-0 text-[13px] font-semibold text-foreground/70">
                   {t('network.ipAddress')}
                 </span>
-                <div className="flex items-center gap-1.5">
-                  <span className="overflow-hidden text-right font-mono text-[13px] font-semibold text-primary text-ellipsis whitespace-nowrap">
-                    {hidden ? '••••••••••••••' : ipInfo.ip}
-                  </span>
+                <Tooltip content={t('network.copied')} isOpen={copyTooltipOpen}>
                   <button
-                    onClick={() => setHidden((h) => !h)}
-                    className="shrink-0 text-primary/60 hover:text-primary transition-colors"
+                    type="button"
+                    onClick={handleCopy}
+                    className="min-w-0 overflow-hidden text-right text-[13px] font-semibold text-foreground text-ellipsis whitespace-nowrap transition-colors hover:text-primary"
                   >
-                    {hidden ? <IoEyeOffOutline size={14} /> : <IoEyeOutline size={14} />}
+                    {ipInfo.ip}
                   </button>
-                  <Tooltip content={copied ? t('network.copied') : t('network.copy')}>
-                    <button
-                      onClick={handleCopy}
-                      className="shrink-0 text-primary/60 hover:text-primary transition-colors"
-                    >
-                      {copied ? <IoCheckmark size={14} /> : <IoCopyOutline size={14} />}
-                    </button>
-                  </Tooltip>
-                </div>
+                </Tooltip>
               </div>
 
               {ipInfo.country && (
