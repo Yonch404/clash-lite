@@ -337,6 +337,10 @@ function isProxyDelayFailure(error: unknown): boolean {
   return false
 }
 
+function toProxyDelayTimeout(error: unknown): IMihomoDelay | undefined {
+  return isProxyDelayFailure(error) ? { delay: 0 } : undefined
+}
+
 function proxyDelayKey(groupName: string, proxyName: string): string {
   return `${groupName}\x1f${proxyName}`
 }
@@ -1253,10 +1257,11 @@ const Proxies: React.FC = () => {
       try {
         result = await mihomoProxyDelay(proxy, url)
       } catch (error) {
-        if (!isProxyDelayFailure(error)) {
+        const timeoutResult = toProxyDelayTimeout(error)
+        if (!timeoutResult) {
           throw error
         }
-        result = { delay: 0 }
+        result = timeoutResult
       }
 
       if (typeof result.delay === 'number') {
@@ -1363,8 +1368,11 @@ const Proxies: React.FC = () => {
               if (typeof delay.delay === 'number') {
                 queueProxyDelay(groupName, proxy.name, delay.delay)
               }
-            } catch {
-              // ignore
+            } catch (error) {
+              const timeoutResult = toProxyDelayTimeout(error)
+              if (timeoutResult && typeof timeoutResult.delay === 'number') {
+                queueProxyDelay(groupName, proxy.name, timeoutResult.delay)
+              }
             } finally {
               setProxyDelaying(groupName, proxy.name, false)
             }
