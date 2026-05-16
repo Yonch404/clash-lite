@@ -1,6 +1,5 @@
 import { Button, Card, CardBody, CardFooter, Chip, Progress, Tooltip } from '@heroui/react'
 import { useProfileConfig } from '@renderer/hooks/use-profile-config'
-import { useLocation, useNavigate } from 'react-router-dom'
 import { calcTraffic, calcPercent } from '@renderer/utils/calc'
 import { CgLoadbarDoc } from 'react-icons/cg'
 import { IoMdRefresh } from 'react-icons/io'
@@ -12,6 +11,7 @@ import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { TiFolder } from 'react-icons/ti'
 import { useTranslation } from 'react-i18next'
 import { handleSiderCardPointerDown, handleSiderCardPress, siderCardClass } from './sider-card'
+import { useSiderNavigation } from './sider-navigation'
 
 dayjs.extend(relativeTime)
 dayjs.locale('zh-cn')
@@ -27,16 +27,11 @@ const ProfileCard: React.FC<Props> = (props) => {
   const { appConfig, patchAppConfig } = useAppConfig()
   const { iconOnly } = props
   const { profileDisplayDate = 'expire', disableAnimations = false } = appConfig || {}
-  const location = useLocation()
-  const navigate = useNavigate()
-  const match = location.pathname.includes('/profiles')
+  const { selected: match, goToPage } = useSiderNavigation('/profiles')
   const [updating, setUpdating] = useState(false)
   const [showRuntimeConfig, setShowRuntimeConfig] = useState(false)
   const { profileConfig, addProfileItem } = useProfileConfig()
   const { current, items } = profileConfig ?? {}
-  const goToPage = (): void => {
-    void navigate('/profiles')
-  }
   const info = items?.find((item) => item && item.id === current) ?? {
     id: 'default',
     type: 'local',

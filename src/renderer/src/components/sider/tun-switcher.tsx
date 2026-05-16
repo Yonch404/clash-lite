@@ -2,13 +2,13 @@ import { Button, Card, CardBody, CardFooter, Tooltip } from '@heroui/react'
 import BorderSwitch from '@renderer/components/base/border-swtich'
 import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-config'
 import { TbDeviceIpadHorizontalBolt } from 'react-icons/tb'
-import { useLocation, useNavigate } from 'react-router-dom'
 import React from 'react'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { useTranslation } from 'react-i18next'
 import { restartCore } from '@renderer/utils/ipc'
 import { platform } from '@renderer/utils/init'
 import { handleSiderCardPointerDown, handleSiderCardPress, siderCardClass } from './sider-card'
+import { useSiderNavigation } from './sider-navigation'
 
 interface Props {
   iconOnly?: boolean
@@ -17,16 +17,11 @@ interface Props {
 const TunSwitcher: React.FC<Props> = (props) => {
   const { t } = useTranslation()
   const { iconOnly } = props
-  const location = useLocation()
-  const navigate = useNavigate()
-  const match = location.pathname.includes('/tun') || false
+  const { selected: match, goToPage } = useSiderNavigation('/tun')
   const { appConfig } = useAppConfig()
   const { disableAnimations = false } = appConfig || {}
   const { controledMihomoConfig, patchControledMihomoConfig } = useControledMihomoConfig()
   const tunEnabled = controledMihomoConfig ? (controledMihomoConfig.tun?.enable ?? true) : false
-  const goToPage = (): void => {
-    void navigate('/tun')
-  }
   const onChange = async (enable: boolean): Promise<void> => {
     await patchControledMihomoConfig({ tun: { enable } })
     window.electron.ipcRenderer.send('updateTrayMenu')

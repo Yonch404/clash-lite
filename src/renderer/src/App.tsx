@@ -21,6 +21,7 @@ import NetworkCard from '@renderer/components/sider/network-card'
 import { createTourDriver, getDriver, startTourIfNeeded } from '@renderer/utils/tour'
 import 'driver.js/dist/driver.css'
 import { useTranslation } from 'react-i18next'
+import { SiderNavigationProvider } from '@renderer/components/sider/sider-navigation'
 
 let navigate: NavigateFunction
 
@@ -112,16 +113,18 @@ const App: React.FC = () => {
             </div>
           </div>
         </div>
-        <div className="mt-2 mx-2">
-          <OutboundModeSwitcher />
-        </div>
-        <div style={{ overflowX: 'clip' }}>
-          <div className="grid grid-cols-2 gap-2 m-2">
-            {SIDER_CARDS.map(({ key, Component }) => (
-              <Component key={key} />
-            ))}
+        <SiderNavigationProvider>
+          <div className="mt-2 mx-2">
+            <OutboundModeSwitcher />
           </div>
-        </div>
+          <div style={{ overflowX: 'clip' }}>
+            <div className="grid grid-cols-2 gap-2 m-2">
+              {SIDER_CARDS.map(({ key, Component }) => (
+                <Component key={key} />
+              ))}
+            </div>
+          </div>
+        </SiderNavigationProvider>
       </div>
       <Divider orientation="vertical" />
       <div

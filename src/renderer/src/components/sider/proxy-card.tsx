@@ -1,11 +1,11 @@
 import { Button, Card, CardBody, CardFooter, Chip, Tooltip } from '@heroui/react'
 import { LuGroup } from 'react-icons/lu'
-import { useLocation, useNavigate } from 'react-router-dom'
 import { useGroups } from '@renderer/hooks/use-groups'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { handleSiderCardPointerDown, handleSiderCardPress, siderCardClass } from './sider-card'
+import { useSiderNavigation } from './sider-navigation'
 
 interface Props {
   iconOnly?: boolean
@@ -16,13 +16,8 @@ const ProxyCard: React.FC<Props> = (props) => {
   const { appConfig } = useAppConfig()
   const { iconOnly } = props
   const { disableAnimations = false } = appConfig || {}
-  const location = useLocation()
-  const navigate = useNavigate()
-  const match = location.pathname.includes('/proxies')
+  const { selected: match, goToPage } = useSiderNavigation('/proxies')
   const { groups = [] } = useGroups()
-  const goToPage = (): void => {
-    void navigate('/proxies')
-  }
 
   if (iconOnly) {
     return (

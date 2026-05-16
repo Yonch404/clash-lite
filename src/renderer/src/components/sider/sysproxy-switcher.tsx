@@ -1,13 +1,13 @@
 import { Button, Card, CardBody, CardFooter, Tooltip } from '@heroui/react'
 import { toast } from '@renderer/components/base/toast'
 import BorderSwitch from '@renderer/components/base/border-swtich'
-import { useLocation, useNavigate } from 'react-router-dom'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { triggerSysProxy, updateTrayIcon } from '@renderer/utils/ipc'
 import { AiOutlineGlobal } from 'react-icons/ai'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { handleSiderCardPointerDown, handleSiderCardPress, siderCardClass } from './sider-card'
+import { useSiderNavigation } from './sider-navigation'
 
 interface Props {
   iconOnly?: boolean
@@ -16,15 +16,10 @@ interface Props {
 const SysproxySwitcher: React.FC<Props> = (props) => {
   const { t } = useTranslation()
   const { iconOnly } = props
-  const location = useLocation()
-  const navigate = useNavigate()
-  const match = location.pathname.includes('/sysproxy')
+  const { selected: match, goToPage } = useSiderNavigation('/sysproxy')
   const { appConfig, patchAppConfig } = useAppConfig()
   const { sysProxy, disableAnimations = false } = appConfig || {}
   const { enable } = sysProxy || {}
-  const goToPage = (): void => {
-    void navigate('/sysproxy')
-  }
   const onChange = async (enable: boolean): Promise<void> => {
     const previousState = !enable
 

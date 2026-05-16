@@ -1,6 +1,5 @@
 import { Button, Card, CardBody, CardFooter, Tooltip } from '@heroui/react'
 import { FaCircleArrowDown, FaCircleArrowUp } from 'react-icons/fa6'
-import { useLocation, useNavigate } from 'react-router-dom'
 import { calcTraffic } from '@renderer/utils/calc'
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { IoLink } from 'react-icons/io5'
@@ -8,6 +7,7 @@ import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { useTranslation } from 'react-i18next'
 import { handleSiderCardPointerDown, handleSiderCardPress, siderCardClass } from './sider-card'
 import ConnCardSparkline from './conn-card-sparkline'
+import { useSiderNavigation } from './sider-navigation'
 
 interface Props {
   iconOnly?: boolean
@@ -21,13 +21,8 @@ const ConnCard: React.FC<Props> = (props) => {
   const { iconOnly } = props
   const { appConfig } = useAppConfig()
   const { disableAnimations = false } = appConfig || {}
-  const location = useLocation()
-  const navigate = useNavigate()
-  const match = location.pathname.includes('/connections')
+  const { selected: match, goToPage } = useSiderNavigation('/connections')
   const { t } = useTranslation()
-  const goToPage = (): void => {
-    void navigate('/connections')
-  }
 
   const [upload, setUpload] = useState(0)
   const [download, setDownload] = useState(0)

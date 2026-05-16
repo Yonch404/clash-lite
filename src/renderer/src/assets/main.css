@@ -171,10 +171,7 @@
   --sider-card-hover-bg: hsl(var(--heroui-primary) / 0.3);
 }
 
-.sider-card-interactive:is(:hover, [data-hover='true']):not(
-    .sider-card-selected,
-    .sider-card-committed
-  ),
+.sider-card-interactive:is(:hover, [data-hover='true']):not(.sider-card-selected),
 .profile-card-interactive:hover:not(
     .profile-card-selected,
     .profile-card-committed,
@@ -184,7 +181,6 @@
 }
 
 .sider-card-interactive.sider-card-selected,
-.sider-card-interactive.sider-card-committed,
 .profile-card-interactive.profile-card-selected,
 .profile-card-interactive.profile-card-committed {
   background-color: var(--sider-card-selected-bg);

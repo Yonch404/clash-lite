@@ -4,13 +4,13 @@ import { calcTraffic } from '@renderer/utils/calc'
 import { mihomoVersion, restartCore } from '@renderer/utils/ipc'
 import React, { useEffect, useState } from 'react'
 import { IoMdRefresh } from 'react-icons/io'
-import { useLocation, useNavigate } from 'react-router-dom'
 import PubSub from 'pubsub-js'
 import useSWR from 'swr'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { LuCpu } from 'react-icons/lu'
 import { useTranslation } from 'react-i18next'
 import { handleSiderCardPointerDown, handleSiderCardPress, siderCardClass } from './sider-card'
+import { useSiderNavigation } from './sider-navigation'
 
 interface Props {
   iconOnly?: boolean
@@ -21,12 +21,7 @@ const MihomoCoreCard: React.FC<Props> = (props) => {
   const { iconOnly } = props
   const { disableAnimations = false } = appConfig || {}
   const { data: version, mutate } = useSWR('mihomoVersion', mihomoVersion)
-  const location = useLocation()
-  const navigate = useNavigate()
-  const match = location.pathname.includes('/mihomo')
-  const goToPage = (): void => {
-    void navigate('/mihomo')
-  }
+  const { selected: match, goToPage } = useSiderNavigation('/mihomo')
   const [mem, setMem] = useState(0)
   const [restarting, setRestarting] = useState(false)
   const { t } = useTranslation()

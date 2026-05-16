@@ -1,10 +1,10 @@
 import { Button, Card, CardBody, CardFooter, Tooltip } from '@heroui/react'
 import { IoGlobeOutline } from 'react-icons/io5'
-import { useLocation, useNavigate } from 'react-router-dom'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { handleSiderCardPointerDown, handleSiderCardPress, siderCardClass } from './sider-card'
+import { useSiderNavigation } from './sider-navigation'
 
 interface Props {
   iconOnly?: boolean
@@ -15,12 +15,7 @@ const IPCard: React.FC<Props> = (props) => {
   const { appConfig } = useAppConfig()
   const { iconOnly } = props
   const { disableAnimations = false } = appConfig || {}
-  const location = useLocation()
-  const navigate = useNavigate()
-  const match = location.pathname.includes('/network')
-  const goToPage = (): void => {
-    void navigate('/network')
-  }
+  const { selected: match, goToPage } = useSiderNavigation('/network')
 
   if (iconOnly) {
     return (

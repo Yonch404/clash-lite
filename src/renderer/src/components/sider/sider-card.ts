@@ -20,17 +20,6 @@ const getSiderCard = (target: EventTarget | null): HTMLElement | null => {
   return card instanceof HTMLElement ? card : null
 }
 
-const commitSiderCard = (card: HTMLElement): void => {
-  if (card.classList.contains('sider-card-selected')) {
-    return
-  }
-
-  card.classList.add('sider-card-committed')
-  window.setTimeout(() => {
-    card.classList.remove('sider-card-committed')
-  }, 1000)
-}
-
 export const siderCardClass = (match: boolean, disableAnimations = false): string => {
   const state = match ? 'sider-card-selected' : ''
   const animation = disableAnimations ? 'sider-card-no-animation' : ''
@@ -45,7 +34,6 @@ export const handleSiderCardPress = (event: PressEvent, onPress: () => void): vo
     return
   }
 
-  if (card) commitSiderCard(card)
   onPress()
 }
 
@@ -59,7 +47,6 @@ export const handleSiderCardPointerDown = (
   if (!card || card.dataset.siderPointerNavigated === 'true') return
 
   card.dataset.siderPointerNavigated = 'true'
-  commitSiderCard(card)
   onPress()
 
   window.setTimeout(() => {
