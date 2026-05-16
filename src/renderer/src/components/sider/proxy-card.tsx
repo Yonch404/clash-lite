@@ -1,6 +1,5 @@
-import { Button, Card, CardBody, CardFooter, Chip, Tooltip } from '@heroui/react'
+import { Button, Card, CardBody, CardFooter, Tooltip } from '@heroui/react'
 import { LuGroup } from 'react-icons/lu'
-import { useGroups } from '@renderer/hooks/use-groups'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
@@ -17,7 +16,6 @@ const ProxyCard: React.FC<Props> = (props) => {
   const { iconOnly } = props
   const { disableAnimations = false } = appConfig || {}
   const { selected: match, goToPage } = useSiderNavigation('/proxies')
-  const { groups = [] } = useGroups()
 
   if (iconOnly) {
     return (
@@ -48,7 +46,7 @@ const ProxyCard: React.FC<Props> = (props) => {
         className={siderCardClass(match, disableAnimations)}
       >
         <CardBody className="pb-1 pt-0 px-0">
-          <div className="flex justify-between">
+          <div className="flex">
             <Button
               isIconOnly
               className="bg-transparent pointer-events-none"
@@ -59,24 +57,6 @@ const ProxyCard: React.FC<Props> = (props) => {
                 className={`${match ? 'text-primary-foreground' : 'text-foreground'} text-[24px] font-bold`}
               />
             </Button>
-            <Chip
-              classNames={
-                match
-                  ? {
-                      base: 'border-primary-foreground',
-                      content: 'text-primary-foreground'
-                    }
-                  : {
-                      base: 'border-primary',
-                      content: 'text-primary'
-                    }
-              }
-              size="sm"
-              variant="bordered"
-              className="mr-2 mt-2"
-            >
-              {groups.length}
-            </Chip>
           </div>
         </CardBody>
         <CardFooter className="pt-1">
