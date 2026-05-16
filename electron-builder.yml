@@ -44,7 +44,6 @@ linux:
       to: 'files/linux-core-helper.sh'
   executableName: clash-lite
   icon: build/icons/clash-lite.svg
-  appArmorProfile: build/linux/apparmor-profile
   desktop:
     entry:
       Name: Clash Lite
@@ -63,9 +62,11 @@ linux:
 deb:
   afterInstall: 'build/linux/postinst'
   afterRemove: 'build/linux/postuninst'
+  appArmorProfile: 'build/linux/apparmor-profile'
 rpm:
   afterInstall: 'build/linux/postinst'
   afterRemove: 'build/linux/postuninst'
+  appArmorProfile: 'build/linux/apparmor-profile'
   fpm:
     - '--rpm-rpmbuild-define'
     - '_build_id_links none'
