@@ -6,6 +6,10 @@ import { hasUsableMihomoProfile } from '../config/profileAvailability'
 import { mihomoProfileWorkDir, mihomoWorkConfigPath, mihomoWorkDir } from '../utils/dirs'
 import { stringify } from '../utils/yaml'
 import { deepMerge } from '../utils/merge'
+import {
+  getPendingSubscriptionDirectHosts,
+  getSubscriptionHostname
+} from '../utils/subscriptionRules'
 
 const CONTROLLED_CONFIG_KEYS: (keyof IMihomoConfig)[] = ['mode', 'mixed-port', 'log-level', 'tun']
 
@@ -24,9 +28,51 @@ function pickRuntimeControlledConfig(config: Partial<IMihomoConfig>): Partial<IM
   return picked
 }
 
+function getSubscriptionHostnames(profileConfig: IProfileConfig): string[] {
+  const hostnames = new Set<string>()
+
+  for (const item of profileConfig.items || []) {
+    if (item.type !== 'remote' || item.useProxy || !item.url) continue
+
+    const hostname = getSubscriptionHostname(item.url)
+    if (hostname) {
+      hostnames.add(hostname)
+    }
+  }
+
+  return Array.from(new Set([...hostnames, ...getPendingSubscriptionDirectHosts()]))
+}
+
+function mergeUniqueStrings(current: string[] | undefined, additions: string[]): string[] {
+  const result: string[] = []
+  const seen = new Set<string>()
+
+  for (const value of [...(current || []), ...additions]) {
+    const key = value.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push(value)
+  }
+
+  return result
+}
+
+function injectSubscriptionDirectRules(
+  profile: IMihomoConfig,
+  profileConfig: IProfileConfig
+): void {
+  const hostnames = getSubscriptionHostnames(profileConfig)
+  if (hostnames.length === 0) return
+
+  const directRules = hostnames.map((hostname) => `DOMAIN,${hostname},DIRECT`)
+  const currentRules = Array.isArray(profile.rules) ? (profile.rules as string[]) : []
+  profile.rules = mergeUniqueStrings(directRules, currentRules) as never
+}
+
 export async function generateProfile(): Promise<string | undefined> {
   // 读取最新的配置
-  const { current } = await getProfileConfig(true)
+  const profileConfig = await getProfileConfig(true)
+  const { current } = profileConfig
   const { diffWorkDir = false } = await getAppConfig()
   const baseProfile = await getProfile(current)
   const profileUsable = hasUsableMihomoProfile(baseProfile)
@@ -37,6 +83,8 @@ export async function generateProfile(): Promise<string | undefined> {
     ...(baseProfile.tun || {}),
     enable: profileUsable && (controlledConfig.tun?.enable ?? true)
   } as IMihomoTunConfig
+
+  injectSubscriptionDirectRules(profile, profileConfig)
 
   if (!['silent', 'error', 'warning', 'info', 'debug'].includes(profile['log-level'])) {
     profile['log-level'] = 'warning'

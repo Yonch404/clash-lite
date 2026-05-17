@@ -14,6 +14,7 @@ import { generateProfile } from '../core/factory'
 import { addProfileUpdater, removeProfileUpdater } from '../core/profileUpdater'
 import { mihomoProfileWorkDir, mihomoWorkDir, profileConfigPath, profilePath } from '../utils/dirs'
 import { createLogger } from '../utils/logger'
+import { rememberPendingSubscriptionDirectHost } from '../utils/subscriptionRules'
 import { getAppConfig } from './app'
 import { getControledMihomoConfig } from './controledMihomo'
 import { hasUsableMihomoProfile } from './profileAvailability'
@@ -279,6 +280,16 @@ async function fetchAndValidateSubscription(options: FetchOptions): Promise<Fetc
   return { data, headers: res.headers }
 }
 
+async function prepareSubscriptionDirectRule(url: string): Promise<void> {
+  if (rememberPendingSubscriptionDirectHost(url)) {
+    try {
+      await mihomoHotReloadConfig()
+    } catch (error) {
+      profileLogger.warn('Failed to refresh subscription direct rule before update', error)
+    }
+  }
+}
+
 export async function createProfile(item: Partial<IProfileItem>): Promise<IProfileItem> {
   const id = item.id || new Date().getTime().toString(16)
   const type = item.type || 'local'
@@ -312,8 +323,14 @@ export async function createProfile(item: Partial<IProfileItem>): Promise<IProfi
   if (existing) return existing
 
   const promise = (async (): Promise<IProfileItem> => {
-    const { userAgent, subscriptionTimeout = 30000 } = await getAppConfig()
-    const { 'mixed-port': mixedPort = 7890 } = await getControledMihomoConfig()
+    const [{ userAgent, subscriptionTimeout = 30000 }, mihomoConfig, profileUsable] =
+      await Promise.all([getAppConfig(), getControledMihomoConfig(), hasUsableCurrentProfile()])
+    const { 'mixed-port': mixedPort = 7890 } = mihomoConfig
+    const shouldUseDirectRule =
+      !newItem.useProxy && profileUsable && (mihomoConfig.tun?.enable ?? true)
+    if (shouldUseDirectRule) {
+      await prepareSubscriptionDirectRule(profileUrl)
+    }
     const userItemTimeoutMs =
       typeof newItem.updateTimeout === 'number' && newItem.updateTimeout > 0
         ? newItem.updateTimeout * 1000
@@ -329,21 +346,7 @@ export async function createProfile(item: Partial<IProfileItem>): Promise<IProfi
     const fetchSub = (useProxy: boolean, timeout: number): Promise<FetchResult> =>
       fetchAndValidateSubscription({ ...baseOptions, useProxy, timeout })
 
-    let result: FetchResult
-    if (newItem.useProxy) {
-      result = await fetchSub(Boolean(newItem.useProxy), userItemTimeoutMs)
-    } else {
-      try {
-        result = await fetchSub(false, userItemTimeoutMs)
-      } catch (directError) {
-        try {
-          // smart fallback
-          result = await fetchSub(true, subscriptionTimeout)
-        } catch {
-          throw directError
-        }
-      }
-    }
+    const result = await fetchSub(Boolean(newItem.useProxy), userItemTimeoutMs)
 
     const { data, headers } = result
 
