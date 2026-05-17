@@ -14,7 +14,11 @@ import { generateProfile } from '../core/factory'
 import { addProfileUpdater, removeProfileUpdater } from '../core/profileUpdater'
 import { mihomoProfileWorkDir, mihomoWorkDir, profileConfigPath, profilePath } from '../utils/dirs'
 import { createLogger } from '../utils/logger'
-import { rememberPendingSubscriptionDirectHost } from '../utils/subscriptionRules'
+import {
+  forgetPendingSubscriptionDirectTarget,
+  getSubscriptionDirectTarget,
+  rememberPendingSubscriptionDirectTarget
+} from '../utils/subscriptionRules'
 import { getAppConfig } from './app'
 import { getControledMihomoConfig } from './controledMihomo'
 import { hasUsableMihomoProfile } from './profileAvailability'
@@ -202,7 +206,15 @@ export async function removeProfileItem(id: string): Promise<void> {
   await removeProfileUpdater(id)
 
   let shouldRestart = false
+  let shouldReloadDirectRules = false
   await updateProfileConfig((config) => {
+    const removedItem = config.items.find((item) => item.id === id)
+    shouldReloadDirectRules = Boolean(
+      removedItem?.type === 'remote' &&
+      !removedItem.useProxy &&
+      removedItem.url &&
+      getSubscriptionDirectTarget(removedItem.url)
+    )
     config.items = config.items?.filter((item) => item.id !== id)
     if (config.current === id) {
       shouldRestart = true
@@ -216,6 +228,12 @@ export async function removeProfileItem(id: string): Promise<void> {
   }
   if (shouldRestart) {
     await restartCore()
+  } else if (shouldReloadDirectRules) {
+    try {
+      await mihomoHotReloadConfig()
+    } catch (error) {
+      profileLogger.warn('Failed to refresh subscription direct rule after removal', error)
+    }
   }
   await removeProfileWorkDir(id)
 }
@@ -281,7 +299,8 @@ async function fetchAndValidateSubscription(options: FetchOptions): Promise<Fetc
 }
 
 async function prepareSubscriptionDirectRule(url: string): Promise<void> {
-  if (rememberPendingSubscriptionDirectHost(url)) {
+  const pendingTarget = rememberPendingSubscriptionDirectTarget(url)
+  if (pendingTarget?.isNew) {
     try {
       await mihomoHotReloadConfig()
     } catch (error) {
@@ -328,46 +347,64 @@ export async function createProfile(item: Partial<IProfileItem>): Promise<IProfi
     const { 'mixed-port': mixedPort = 7890 } = mihomoConfig
     const shouldUseDirectRule =
       !newItem.useProxy && profileUsable && (mihomoConfig.tun?.enable ?? true)
+    let shouldForgetPendingDirectRule = false
+    let subscriptionStored = false
     if (shouldUseDirectRule) {
       await prepareSubscriptionDirectRule(profileUrl)
-    }
-    const userItemTimeoutMs =
-      typeof newItem.updateTimeout === 'number' && newItem.updateTimeout > 0
-        ? newItem.updateTimeout * 1000
-        : subscriptionTimeout
-
-    const baseOptions: Omit<FetchOptions, 'useProxy' | 'timeout'> = {
-      url: profileUrl,
-      mixedPort,
-      userAgent: item.userAgent || userAgent || `clash-lite/v${app.getVersion()}`,
-      authToken: item.authToken
+      shouldForgetPendingDirectRule = Boolean(getSubscriptionDirectTarget(profileUrl))
     }
 
-    const fetchSub = (useProxy: boolean, timeout: number): Promise<FetchResult> =>
-      fetchAndValidateSubscription({ ...baseOptions, useProxy, timeout })
+    try {
+      const userItemTimeoutMs =
+        typeof newItem.updateTimeout === 'number' && newItem.updateTimeout > 0
+          ? newItem.updateTimeout * 1000
+          : subscriptionTimeout
 
-    const result = await fetchSub(Boolean(newItem.useProxy), userItemTimeoutMs)
+      const baseOptions: Omit<FetchOptions, 'useProxy' | 'timeout'> = {
+        url: profileUrl,
+        mixedPort,
+        userAgent: item.userAgent || userAgent || `clash-lite/v${app.getVersion()}`,
+        authToken: item.authToken
+      }
 
-    const { data, headers } = result
+      const fetchSub = (useProxy: boolean, timeout: number): Promise<FetchResult> =>
+        fetchAndValidateSubscription({ ...baseOptions, useProxy, timeout })
 
-    if (headers['content-disposition'] && newItem.name === 'Remote File') {
-      newItem.name = parseFilename(headers['content-disposition'])
-    }
-    if (headers['profile-web-page-url']) {
-      newItem.home = headers['profile-web-page-url']
-    }
-    if (headers['profile-update-interval'] && !item.allowFixedInterval) {
-      const hours = Number(headers['profile-update-interval'])
-      if (Number.isFinite(hours) && hours > 0) {
-        newItem.interval = Math.min(Math.ceil(hours * 60), MAX_PROFILE_INTERVAL_MINUTES)
+      const result = await fetchSub(Boolean(newItem.useProxy), userItemTimeoutMs)
+
+      const { data, headers } = result
+
+      if (headers['content-disposition'] && newItem.name === 'Remote File') {
+        newItem.name = parseFilename(headers['content-disposition'])
+      }
+      if (headers['profile-web-page-url']) {
+        newItem.home = headers['profile-web-page-url']
+      }
+      if (headers['profile-update-interval'] && !item.allowFixedInterval) {
+        const hours = Number(headers['profile-update-interval'])
+        if (Number.isFinite(hours) && hours > 0) {
+          newItem.interval = Math.min(Math.ceil(hours * 60), MAX_PROFILE_INTERVAL_MINUTES)
+        }
+      }
+      if (headers['subscription-userinfo']) {
+        newItem.extra = parseSubinfo(headers['subscription-userinfo'])
+      }
+
+      await setProfileStr(id, data)
+      subscriptionStored = true
+      return newItem
+    } finally {
+      if (shouldForgetPendingDirectRule) {
+        const pendingTargetRemoved = forgetPendingSubscriptionDirectTarget(profileUrl)
+        if (pendingTargetRemoved && !subscriptionStored) {
+          try {
+            await mihomoHotReloadConfig()
+          } catch (error) {
+            profileLogger.warn('Failed to clean up pending subscription direct rule', error)
+          }
+        }
       }
     }
-    if (headers['subscription-userinfo']) {
-      newItem.extra = parseSubinfo(headers['subscription-userinfo'])
-    }
-
-    await setProfileStr(id, data)
-    return newItem
   })()
 
   inflightRemoteFetches.set(dedupKey, promise)

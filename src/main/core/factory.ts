@@ -7,8 +7,10 @@ import { mihomoProfileWorkDir, mihomoWorkConfigPath, mihomoWorkDir } from '../ut
 import { stringify } from '../utils/yaml'
 import { deepMerge } from '../utils/merge'
 import {
-  getPendingSubscriptionDirectHosts,
-  getSubscriptionHostname
+  getPendingSubscriptionDirectTargets,
+  getSubscriptionDirectTarget,
+  subscriptionDirectTargetKey,
+  type SubscriptionDirectTarget
 } from '../utils/subscriptionRules'
 
 const CONTROLLED_CONFIG_KEYS: (keyof IMihomoConfig)[] = ['mode', 'mixed-port', 'log-level', 'tun']
@@ -28,19 +30,35 @@ function pickRuntimeControlledConfig(config: Partial<IMihomoConfig>): Partial<IM
   return picked
 }
 
-function getSubscriptionHostnames(profileConfig: IProfileConfig): string[] {
-  const hostnames = new Set<string>()
+function getSubscriptionDirectTargets(profileConfig: IProfileConfig): SubscriptionDirectTarget[] {
+  const targets = new Map<string, SubscriptionDirectTarget>()
 
   for (const item of profileConfig.items || []) {
     if (item.type !== 'remote' || item.useProxy || !item.url) continue
 
-    const hostname = getSubscriptionHostname(item.url)
-    if (hostname) {
-      hostnames.add(hostname)
+    const target = getSubscriptionDirectTarget(item.url)
+    if (target) {
+      targets.set(subscriptionDirectTargetKey(target), target)
     }
   }
 
-  return Array.from(new Set([...hostnames, ...getPendingSubscriptionDirectHosts()]))
+  for (const target of getPendingSubscriptionDirectTargets()) {
+    targets.set(subscriptionDirectTargetKey(target), target)
+  }
+
+  return Array.from(targets.values())
+}
+
+function getSubscriptionDirectRule(target: SubscriptionDirectTarget): string {
+  if (target.type === 'domain') {
+    return `DOMAIN,${target.value},DIRECT`
+  }
+
+  if (target.family === 6) {
+    return `IP-CIDR6,${target.value}/128,DIRECT,no-resolve`
+  }
+
+  return `IP-CIDR,${target.value}/32,DIRECT,no-resolve`
 }
 
 function mergeUniqueStrings(current: string[] | undefined, additions: string[]): string[] {
@@ -61,10 +79,10 @@ function injectSubscriptionDirectRules(
   profile: IMihomoConfig,
   profileConfig: IProfileConfig
 ): void {
-  const hostnames = getSubscriptionHostnames(profileConfig)
-  if (hostnames.length === 0) return
+  const targets = getSubscriptionDirectTargets(profileConfig)
+  if (targets.length === 0) return
 
-  const directRules = hostnames.map((hostname) => `DOMAIN,${hostname},DIRECT`)
+  const directRules = targets.map(getSubscriptionDirectRule)
   const currentRules = Array.isArray(profile.rules) ? (profile.rules as string[]) : []
   profile.rules = mergeUniqueStrings(directRules, currentRules) as never
 }
